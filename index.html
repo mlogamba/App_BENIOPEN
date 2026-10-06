@@ -1080,16 +1080,13 @@ function fetchLiveResults(forceRefresh){
   if(container) container.innerHTML = '<div class="empty">⏳ Conectando con beniopen.es...</div>';
   
   const targetUrl = 'https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/';
-  const proxyUrl = 'https://api.allorigins.win/raw?url=';
+  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
 
-  fetch(proxyUrl + encodeURIComponent(targetUrl))
-  .then(response => {
-    if (!response.ok) throw new Error('Errore nella rete');
-    return response.text();
-  })
-  .then(data => {
-    // elaborazione dei dati della tabella
-  });
+  fetch(proxyUrl)
+    .then(res => {
+      if(!res.ok) throw new Error('Proxy status ' + res.status);
+      return res.text();
+    })
     .then(html => {
       const matches = parseResultsHtml(html);
       if(matches.length > 0){
