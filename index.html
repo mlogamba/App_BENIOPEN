@@ -469,7 +469,15 @@ const PLAYERS = {
 };
 /* Posizione nel Ranking Actual (ediciones XVII y XVIII) - https://www.beniopen.es/ranking-beniopen/actual/ */
 const RANKING = {
-  "Javier Herrero": 33
+  "Javier Herrero": 137,
+  "Vale T.": 172,
+  "Miguel Arellano": 26,
+  "Tim Fedeseev": 108,
+  "Juan C. Arias": 52,
+  "Ramón Andrés": 184,
+  "Juan B. Esteve": 182,
+  "Luis Neira": 77,
+  "Marcello Gambardella": 146
 };
 function rankOf(opp){ return RANKING[opp] || null; }
 function rankChip(opp){ const r = rankOf(opp); return r ? `<small class="rk">🏅 nº${r}</small>` : ''; }
