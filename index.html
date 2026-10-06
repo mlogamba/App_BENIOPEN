@@ -1775,6 +1775,11 @@ function generarInvitacion(){
   sendWrap.innerHTML = btns;
 }
 
+/* Helper per verificare se si trova in ambiente Google Apps Script */
+function isGasEnv() {
+  return typeof google !== 'undefined' && typeof google.script !== 'undefined' && typeof google.script.run !== 'undefined';
+}
+
 /* ---------- SINCRONIZACIÓN CON GOOGLE SHEETS / CLOUD ---------- */
 function salvaDatiCloud(){
   if(isSaving || !isGasEnv()) return;
@@ -1798,7 +1803,18 @@ function salvaDatiCloud(){
 }
 
 function caricaDatiCloud(){
-  if(!isGasEnv()) return;
+  if(!isGasEnv()) {
+    // Se su GitHub Pages, carica dal localStorage locale
+    const local = localStorage.getItem('beniopen_data');
+    if(local) {
+      try {
+        store = normalizeStore(JSON.parse(local));
+      } catch(e){}
+    }
+    refreshAll();
+    return;
+  }
+
   isSyncing = true;
   showSyncIndicator("Cargando…");
 
@@ -1816,11 +1832,13 @@ function caricaDatiCloud(){
           showSyncIndicator("Error de datos");
         }
       }else{
+        refreshAll();
         showSyncIndicator("Listo");
       }
     })
     .withFailureHandler(function(err){
       isSyncing = false;
+      refreshAll();
       showSyncIndicator("Modo offline");
     })
     .caricaDatiApp();
