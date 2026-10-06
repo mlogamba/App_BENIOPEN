@@ -1739,99 +1739,98 @@ function renderInvitar(){
 
 function generarInvitacion(){
   const opp = document.getElementById('inv-opp').value;
-  const date = document.getElementById('inv-date').value;
-  const time = document.getElementById('inv-time').value;
+  const dateVal = document.getElementById('inv-date').value;
+  const timeVal = document.getElementById('inv-time').value;
+  
   const campoSel = document.getElementById('inv-campo');
-  let campo = campoSel.value;
-  if(campo === '__custom__'){
+  let campoVal = campoSel.value;
+  if(campoVal === '__custom__'){
     const typed = document.getElementById('inv-campo-newname');
-    campo = typed ? typed.value.trim() : '';
+    campoVal = typed ? typed.value.trim() : '';
   }
-  if(campo) { store.cache.campo = campo; save(); }
-  const f = FIXTURE.find(x=>x.opp===opp);
-  const text = "Hola "+opp+"! Soy Marcello Gambardella, tu rival de la jornada "+f.n+" del 37º Beniopen (Segunda B). Te propongo jugar el "+fmtDate(date)+(time?" a las "+time+"h":"")+(campo?" en "+campo:"")+". ¿Te viene bien? ¡Un saludo!";
-  document.getElementById('inv-msgbox').innerHTML = `<div class="msgbox">${escapeHtml(text)}</div>`;
-  const p = PLAYERS[opp];
-  document.getElementById('inv-send').innerHTML = `<a class="btn wa" href="${waLink(p.phone, text)}" target="_blank" rel="noopener" style="width:100%;">📱 Enviar por WhatsApp</a>`;
+
+  const f = FIXTURE.find(item => item.opp === opp);
+  const periodo = f ? f.periodo : '';
+  const jNum = f ? f.n : '';
+
+  let msg = `Hola ${opp}! Soy Marcello. Te propongo jugar la Jornada ${jNum} del Beniopen (${periodo})`;
+  if(dateVal) msg += ` el ${fmtDate(dateVal)}`;
+  if(timeVal) msg += ` a las ${timeVal}h`;
+  if(campoVal) msg += ` en ${campoVal}`;
+  msg += `. ¿Te viene bien?`;
+
+  const msgBox = document.getElementById('inv-msgbox');
+  msgBox.innerHTML = `<div class="msgbox">${escapeHtml(msg)}</div>`;
+
+  const sendWrap = document.getElementById('inv-send');
+  const p = PLAYERS[opp] || {phone:'', email:''};
+  
+  let btns = `<button type="button" class="btn ghost small" onclick="copyText('${escapeHtml(msg).replace(/'/g, "\\'")}', this)">📋 Copiar texto</button>`;
+  if(p.phone){
+    btns += `<a class="btn wa small" href="${waLink(p.phone, msg)}" target="_blank" rel="noopener">📱 Enviar por WhatsApp</a>`;
+  }
+  if(p.email){
+    btns += `<a class="btn mail small" href="${mailLink(p.email, '', 'Propuesta partido Beniopen', msg)}" target="_blank" rel="noopener">✉️ Enviar por Email</a>`;
+  }
+  sendWrap.innerHTML = btns;
 }
 
-/* ---------- Sincronización con el servidor (Apps Script) ---------- */
+/* ---------- SINCRONIZACIÓN CON GOOGLE SHEETS / CLOUD ---------- */
 function salvaDatiCloud(){
-  if(!isGasEnv()) return;
-  hasPendingLocalWrite = true;
-  if(isSaving) return;
+  if(isSaving || !isGasEnv()) return;
   isSaving = true;
-  const payload = JSON.stringify(store);
-  hasPendingLocalWrite = false;
-  showSyncIndicator('Guardando…');
+  showSyncIndicator("Guardando…");
+
   google.script.run
-    .withSuccessHandler(function(){
+    .withSuccessHandler(function(res){
       isSaving = false;
-      if(hasPendingLocalWrite){ hasPendingLocalWrite = false; salvaDatiCloud(); }
+      showSyncIndicator("Guardado ✓");
+      if(hasPendingLocalWrite){
+        hasPendingLocalWrite = false;
+        salvaDatiCloud();
+      }
     })
     .withFailureHandler(function(err){
       isSaving = false;
-      console.error('Error al guardar en la nube:', err);
-      showSyncIndicator('⚠️ No se pudo guardar');
+      showSyncIndicator("Error al guardar");
     })
-    .salvaDatiNelFoglio(payload);
+    .salvaDatiApp(JSON.stringify(store));
 }
 
 function caricaDatiCloud(){
   if(!isGasEnv()) return;
-  if(isSyncing || isSaving) return;
   isSyncing = true;
+  showSyncIndicator("Cargando…");
+
   google.script.run
-    .withSuccessHandler(function(data){
+    .withSuccessHandler(function(dataJson){
       isSyncing = false;
-      if(data && data.beniopen_data){
+      if(dataJson){
         try{
-          const remoteStore = normalizeStore(JSON.parse(data.beniopen_data));
-          if(JSON.stringify(remoteStore) !== JSON.stringify(store)){
-            store = remoteStore;
-            try{ localStorage.setItem('beniopen_data', JSON.stringify(store)); }catch(e){}
-          }
+          const parsed = typeof dataJson === 'string' ? JSON.parse(dataJson) : dataJson;
+          store = normalizeStore(parsed);
+          localStorage.setItem('beniopen_data', JSON.stringify(store));
+          refreshAll();
+          showSyncIndicator("Sincronizado ✓");
         }catch(e){
-          console.error('Datos remotos invalidos:', e);
+          showSyncIndicator("Error de datos");
         }
+      }else{
+        showSyncIndicator("Listo");
       }
     })
     .withFailureHandler(function(err){
       isSyncing = false;
+      showSyncIndicator("Modo offline");
     })
-    .leggiDatiCloud();
+    .caricaDatiApp();
 }
 
-/* ---------- PWA: service worker ---------- */
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
-    navigator.serviceWorker
-      .register('<?= swUrl ?>')
-      .then(function(registration) {
-        console.log('Service Worker registrato:', registration.scope);
-      })
-      .catch(function(error) {
-        console.warn('Service Worker non registrato:', error);
-      });
-  });
-}
-
-/* ---------- Init ---------- */
-try { renderInicio(); } catch(e) { console.error('[Beniopen] renderInicio error:', e); }
-
-if(isGasEnv()){
+/* ---------- INICIALIZACIÓN ---------- */
+document.addEventListener('DOMContentLoaded', function(){
+  renderInicio();
   caricaDatiCloud();
-  let syncTimer = setInterval(caricaDatiCloud, 8000);
-
-  document.addEventListener('visibilitychange', function(){
-    if(document.hidden){
-      clearInterval(syncTimer);
-    } else {
-      caricaDatiCloud();
-      syncTimer = setInterval(caricaDatiCloud, 8000);
-    }
-  });
-}
+});
 </script>
 </body>
 </html>
