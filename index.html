@@ -806,9 +806,18 @@ function fetchWithTimeout(url, ms){
   return fetch(url, {signal: ctrl.signal}).finally(()=>clearTimeout(t));
 }
 
-/* Obtiene el HTML de la clasificación: 1) servidor Apps Script, 2) proxies CORS */
+/* Memoria cache para clasificaciones */
+const clasificacionCache = {};
+
+/* Obtiene el HTML de la clasificación: 1) cache local, 2) servidor Apps Script, 3) proxies CORS */
 function getClasificacionHtml(slug){
   const target = 'https://www.beniopen.es/table/' + slug + '/';
+  const now = Date.now();
+
+  // 1) Si ya tenemos la clasificación guardada (menos de 10 minutos), la devolvemos inmediatamente
+  if (clasificacionCache[slug] && (now - clasificacionCache[slug].timestamp < 10 * 60 * 1000)) {
+    return Promise.resolve(clasificacionCache[slug].html);
+  }
 
   const viaGas = () => new Promise((resolve, reject)=>{
     if(!isGasEnv()) return reject(new Error('Sin Apps Script'));
@@ -825,10 +834,11 @@ function getClasificacionHtml(slug){
     });
 
   const attempts = [
-    viaGas,
+    viaProxy(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)),
     viaProxy(u => 'https://corsproxy.org/?' + encodeURIComponent(u)),
-    viaProxy(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u))
-];
+    viaProxy(u => 'https://thingproxy.freeboard.io/fetch/' + encodeURIComponent(u))
+  ];
+
   let lastErr = null;
   return attempts.reduce((chain, attempt)=>
     chain.catch(err=>{
@@ -839,7 +849,14 @@ function getClasificacionHtml(slug){
       });
     }),
     Promise.reject(null)
-  ).catch(err => { throw (err || lastErr || new Error('No se pudo cargar la tabla.')); });
+  ).then(html => {
+    // Save en cache antes de devolver
+    clasificacionCache[slug] = {
+      html: html,
+      timestamp: Date.now()
+    };
+    return html;
+  }).catch(err => { throw (err || lastErr || new Error('No se pudo cargar la tabla.')); });
 }
 
 /* silent=true: refresco automático sin parpadeo (mantiene la tabla visible) */
@@ -995,6 +1012,9 @@ function renderLiveClasificacionTable(){
 }
 
 /* ---------- RESULTADOS EN TIEMPO REAL (FILTRADOS POR GIRONE) ---------- */
+let cachedLiveResults = null;
+let currentLiveGroup = 'B';
+
 function openLiveResultsModal(defaultGroup){
   if(defaultGroup) currentLiveGroup = defaultGroup;
   document.getElementById('modal-title').textContent = "🏁 Resultados en tiempo real";
@@ -1029,10 +1049,10 @@ function openLiveResultsModal(defaultGroup){
 
   document.getElementById('modal-bg').classList.add('open');
 
-  if(cachedLiveResults && (Date.now() - cachedLiveResults._fetchedAt < 120000)){
-    renderLiveResultsList();
-  } else {
+  if(!cachedLiveResults || (Date.now() - cachedLiveResults._fetchedAt > 10 * 60 * 1000)){
     fetchLiveResults();
+  } else {
+    renderLiveResultsList();
   }
 }
 
@@ -1076,53 +1096,69 @@ function parseResultsHtml(html) {
 
 function fetchLiveResults(forceRefresh){
   const container = document.getElementById('live-results-container');
+
+  if(!forceRefresh && cachedLiveResults && (Date.now() - cachedLiveResults._fetchedAt < 10 * 60 * 1000)){
+    renderLiveResultsList();
+    return;
+  }
+
   if(container) container.innerHTML = '<div class="empty">⏳ Conectando con beniopen.es...</div>';
   
   const targetUrl = 'https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/';
-  const targetUrl = 'https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/';
-  const proxyUrl = 'https://corsproxy.org/?' + encodeURIComponent(targetUrl);
 
-  fetch(proxyUrl)
-    .then(res => {
-      if(!res.ok) throw new Error('Proxy status ' + res.status);
-      return res.text();
-    })
-    .then(html => {
-      const matches = parseResultsHtml(html);
-      if(matches.length > 0){
+  const viaProxy = proxyBuilder => () =>
+    fetchWithTimeout(proxyBuilder(targetUrl), 9000).then(r=>{
+      if(!r.ok) throw new Error('Proxy status ' + r.status);
+      return r.text();
+    });
+
+  const attempts = [
+    viaProxy(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)),
+    viaProxy(u => 'https://corsproxy.org/?' + encodeURIComponent(u)),
+    viaProxy(u => 'https://thingproxy.freeboard.io/fetch/' + encodeURIComponent(u))
+  ];
+
+  let lastErr = null;
+  attempts.reduce((chain, attempt)=>
+    chain.catch(err=>{
+      if(err) lastErr = err;
+      return attempt().then(html=>{
+        const matches = parseResultsHtml(html);
+        if(!matches.length) throw new Error('Sin partidos detectados');
+        
         cachedLiveResults = {
           success: true,
           matches: matches,
-          timestamp: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})
+          timestamp: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'}),
+          _fetchedAt: Date.now()
         };
-        cachedLiveResults._fetchedAt = Date.now();
         renderLiveResultsList();
-        return;
-      }
-      throw new Error('Sin partidos detectados');
-    })
-    .catch(err => {
-      console.warn('Client proxy fetch failed, trying GAS backend:', err);
-      if(isGasEnv()){
-        google.script.run
-          .withSuccessHandler(function(res){
-            if(res && res.success && Array.isArray(res.matches)){
-              cachedLiveResults = res;
-              cachedLiveResults._fetchedAt = Date.now();
-              renderLiveResultsList();
-            } else {
-              showLiveError(res && res.error ? res.error : 'Error de servidor');
-            }
-          })
-          .withFailureHandler(function(err){
-            showLiveError(err.message || err);
-          })
-          .leggiRisultatiBeniopen();
-      } else {
-        showLiveError('No se pudieron descargar los datos en tiempo real automáticamente.');
-      }
-    });
+        return true;
+      });
+    }),
+    Promise.reject(null)
+  ).catch(err => {
+    if(typeof isGasEnv === 'function' && isGasEnv()){
+      google.script.run
+        .withSuccessHandler(function(res){
+          if(res && res.success && Array.isArray(res.matches)){
+            cachedLiveResults = res;
+            cachedLiveResults._fetchedAt = Date.now();
+            renderLiveResultsList();
+          } else {
+            showLiveError(res && res.error ? res.error : 'Error de servidor');
+          }
+        })
+        .withFailureHandler(function(err){
+          showLiveError(err.message || err);
+        })
+        .leggiRisultatiBeniopen();
+    } else {
+      showLiveError('No se pudieron descargar los datos en tiempo real automáticamente.');
+    }
+  });
 }
+
 function showLiveError(errMsg){
   const container = document.getElementById('live-results-container');
   if(!container) return;
