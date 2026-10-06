@@ -16,6 +16,7 @@ function doGet(e) {
     try {
       if (params.api === 'clas') out = leggiClasificacionBeniopen(params.slug, params.force === '1');
       else if (params.api === 'res') out = leggiRisultatiBeniopen(params.force === '1');
+      else if (params.api === 'load') { var d = leggiDatiCloud(); out = { success: true, data: d[STORAGE_KEY] || null }; }
       else out = { success: false, error: 'api desconocida' };
     } catch (err) {
       out = { success: false, error: String(err) };
@@ -50,6 +51,24 @@ function doGet(e) {
       'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover'
     )
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/** Escritura y Calendar desde la app alojada en GitHub (POST text/plain, sin preflight) */
+function doPost(e) {
+  var out;
+  try {
+    var body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    switch (body.action) {
+      case 'salvaDatiNelFoglio':     out = salvaDatiNelFoglio(body.arg); break;
+      case 'leggiDatiCloud':         out = leggiDatiCloud(); out.success = true; break;
+      case 'creaEventoCalendario':   out = creaEventoCalendario(body.arg); break;
+      case 'eliminaEventoCalendario': out = eliminaEventoCalendario(body.arg); break;
+      default: out = { success: false, error: 'accion desconocida' };
+    }
+  } catch (err) {
+    out = { success: false, error: String(err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function getManifestJson_() {
@@ -102,47 +121,76 @@ function getServiceWorkerJs_() {
   ].join('\n');
 }
 
+var CHUNK_ = 2500;
+
+function writeChunks_(props, prefix, str) {
+  var old = parseInt(props.getProperty(prefix + '_n') || '0', 10);
+  var n = Math.ceil(str.length / CHUNK_), o = {};
+  for (var i = 0; i < n; i++) o[prefix + '_' + i] = str.substr(i * CHUNK_, CHUNK_);
+  o[prefix + '_n'] = String(n);
+  props.setProperties(o);
+  for (var j = n; j < old; j++) props.deleteProperty(prefix + '_' + j);
+}
+
+function readChunks_(props, prefix) {
+  var n = parseInt(props.getProperty(prefix + '_n') || '0', 10);
+  if (!n) return null;
+  var s = '';
+  for (var i = 0; i < n; i++) {
+    var c = props.getProperty(prefix + '_' + i);
+    if (c === null) return null;
+    s += c;
+  }
+  return s;
+}
+
+function readCurrent_(props) {
+  return readChunks_(props, STORAGE_KEY + '_c') || props.getProperty(STORAGE_KEY) || null;
+}
+
 function salvaDatiNelFoglio(jsonString) {
   var lock = LockService.getScriptLock();
-
   try {
-    lock.waitLock(10000);
-
-    PropertiesService
-      .getScriptProperties()
-      .setProperty(STORAGE_KEY, jsonString);
-
+    lock.waitLock(15000);
+    var s = String(jsonString || '');
+    JSON.parse(s); // rechaza datos corruptos
+    var props = PropertiesService.getScriptProperties();
+    var cur = readCurrent_(props);
+    if (cur && cur !== s) writeChunks_(props, STORAGE_KEY + '_prev', cur); // copia de seguridad anterior
+    writeChunks_(props, STORAGE_KEY + '_c', s);
+    props.deleteProperty(STORAGE_KEY); // formato antiguo
     return { success: true };
   } catch (err) {
-    return {
-      success: false,
-      error: String(err)
-    };
+    return { success: false, error: String(err) };
   } finally {
-    try {
-      lock.releaseLock();
-    } catch (e) {}
+    try { lock.releaseLock(); } catch (e) {}
   }
 }
 
 function leggiDatiCloud() {
-  var jsonString = PropertiesService
-    .getScriptProperties()
-    .getProperty(STORAGE_KEY);
-
+  var cur = readCurrent_(PropertiesService.getScriptProperties());
   var result = {};
-
-  if (jsonString) {
-    result[STORAGE_KEY] = jsonString;
-  }
-
+  if (cur) result[STORAGE_KEY] = cur;
   return result;
 }
 
 function resetDatiCloud() {
-  PropertiesService
-    .getScriptProperties()
-    .deleteProperty(STORAGE_KEY);
+  var props = PropertiesService.getScriptProperties();
+  ['_c', '_prev'].forEach(function (suf) {
+    var n = parseInt(props.getProperty(STORAGE_KEY + suf + '_n') || '0', 10);
+    for (var i = 0; i < n; i++) props.deleteProperty(STORAGE_KEY + suf + '_' + i);
+    props.deleteProperty(STORAGE_KEY + suf + '_n');
+  });
+  props.deleteProperty(STORAGE_KEY);
+}
+
+/** Restaurar la copia anterior (ejecutar a mano desde el editor si hace falta) */
+function restaurarCopiaAnterior() {
+  var props = PropertiesService.getScriptProperties();
+  var prev = readChunks_(props, STORAGE_KEY + '_prev');
+  if (!prev) { Logger.log('No hay copia anterior'); return; }
+  writeChunks_(props, STORAGE_KEY + '_c', prev);
+  Logger.log('Copia anterior restaurada');
 }
 
 /* =====================================================================
