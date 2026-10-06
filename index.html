@@ -543,6 +543,7 @@ function normalizeStore(s){
   if(!s.cache || typeof s.cache !== 'object') s.cache = {campo:""};
   if(!Array.isArray(s.courts) || s.courts.length === 0) s.courts = DEFAULT_COURTS.map(c=>({...c}));
   if(!s.privNotes || typeof s.privNotes !== 'object') s.privNotes = {};
+  if(typeof s._rev !== 'number') s._rev = 0;
   return s;
 }
 
@@ -551,6 +552,12 @@ try{
   if(raw) store = JSON.parse(raw);
 }catch(e){}
 store = normalizeStore(store);
+/* Datos antiguos sin versión: se marcan para que se suban a la nube */
+(function(){
+  const has = Object.keys(store.matches).some(k=>{ const m = store.matches[k]; return m && (m.played || m.date || m.notes); })
+    || Object.keys(store.privNotes).length > 0;
+  if(!store._rev && has){ store._rev = 1; try{ localStorage.setItem('beniopen_data', JSON.stringify(store)); }catch(e){} }
+})();
 
 function isGasEnv(){
   return typeof google !== 'undefined' && google.script && google.script.run;
@@ -566,6 +573,7 @@ function showSyncIndicator(text){
 }
 
 function save(){
+  store._rev = Date.now();
   try{
     localStorage.setItem('beniopen_data', JSON.stringify(store));
   }catch(e){}
@@ -1594,50 +1602,39 @@ function guardarYCalendario(n, invitar){
 
   const m = getMatch(n);
   const f = FIXTURE[n-1];
-  const p = PLAYERS[f.opp];
+  const p = PLAYERS[f.opp] || {email:''};
   const statusDiv = document.getElementById('cal-status');
   const btns = document.querySelectorAll('#modal-body .btn-cal-action');
+
+  if(!isGasEnv() && !webSyncEnabled()){
+    if(statusDiv) statusDiv.textContent = "⚠️ Falta configurar GAS_API_URL en la app para usar Google Calendar.";
+    return;
+  }
   btns.forEach(b=>b.disabled = true);
   if(statusDiv) statusDiv.textContent = invitar
     ? "Sincronizando evento e invitando a " + f.opp + "…"
     : "Sincronizando evento con Google Calendar…";
 
-  if(!isGasEnv()){
-    if(statusDiv) statusDiv.textContent = "⚠️ Esta función solo funciona cuando la app está desplegada como Web App de Google Apps Script (aquí en vista previa no está disponible).";
-    btns.forEach(b=>b.disabled = false);
-    return;
-  }
-
-  google.script.run
-    .withSuccessHandler(function(res){
+  serverRun('creaEventoCalendario', {
+      n: n, opp: f.opp, email: p.email, date: m.date, time: m.time,
+      campo: m.campoAddress || m.campo, notes: m.notes,
+      invita: !!invitar, eventId: m.eventId || ''
+    })
+    .then(function(res){
       btns.forEach(b=>b.disabled = false);
       if(res && res.success){
         m.eventId = res.eventId;
         m.eventInvited = !!invitar;
         save();
-        if(statusDiv) statusDiv.textContent = invitar
-          ? "✅ Evento sincronizado e invitación enviada a " + (p.email || f.opp) + "."
-          : "✅ Evento sincronizado con Google Calendar.";
         refreshAll();
         closeModal();
       } else {
         if(statusDiv) statusDiv.textContent = "❌ No se pudo sincronizar: " + (res && res.error ? res.error : "Error desconocido");
       }
     })
-    .withFailureHandler(function(err){
+    .catch(function(err){
       btns.forEach(b=>b.disabled = false);
       if(statusDiv) statusDiv.textContent = "❌ Error del servidor: " + (err && err.message ? err.message : err);
-    })
-    .creaEventoCalendario({
-      n: n,
-      opp: f.opp,
-      email: p ? p.email : '',
-      date: m.date,
-      time: m.time,
-      campo: m.campoAddress || m.campo,
-      notes: m.notes,
-      invita: !!invitar,
-      eventId: m.eventId || ''
     });
 }
 
@@ -1652,19 +1649,15 @@ function cancelarCita(n){
     refreshAll();
   };
 
-  if(m.eventId && isGasEnv()){
+  if(m.eventId && (isGasEnv() || webSyncEnabled())){
     const statusDiv = document.getElementById('cal-status');
     if(statusDiv) statusDiv.textContent = "Eliminando evento de Google Calendar…";
-    google.script.run
-      .withSuccessHandler(function(res){
-        if(res && !res.success && statusDiv){ statusDiv.textContent = "⚠️ No se pudo borrar el evento (" + res.error + "), pero se cancela igualmente la cita en la app."; }
+    serverRun('eliminaEventoCalendario', m.eventId)
+      .then(function(res){
+        if(res && res.success === false && statusDiv){ statusDiv.textContent = "⚠️ No se pudo borrar el evento (" + res.error + "), pero se cancela igualmente la cita en la app."; }
         finish();
       })
-      .withFailureHandler(function(err){
-        if(statusDiv) statusDiv.textContent = "⚠️ No se pudo borrar el evento del calendario, pero se cancela igualmente la cita en la app.";
-        finish();
-      })
-      .eliminaEventoCalendario(m.eventId);
+      .catch(function(){ finish(); });
   } else {
     finish();
   }
@@ -1812,51 +1805,89 @@ function generarInvitacion(){
   document.getElementById('inv-send').innerHTML = `<a class="btn wa" href="${waLink(p.phone, text)}" target="_blank" rel="noopener" style="width:100%;">📱 Enviar por WhatsApp</a>`;
 }
 
-/* ---------- Sincronización con el servidor (Apps Script) ---------- */
+/* ---------- Sincronización con la nube (Apps Script) ---------- */
+function webSyncEnabled(){
+  return !isGasEnv() && !!GAS_API_URL && GAS_API_URL.indexOf('/exec') > -1;
+}
+
+/* Llama a una función del servidor, tanto dentro de Apps Script como desde GitHub Pages */
+function serverRun(fn, arg){
+  if(isGasEnv()){
+    return new Promise((resolve, reject)=>{
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(e => reject(new Error((e && e.message) || String(e))))
+        [fn](arg);
+    });
+  }
+  if(!webSyncEnabled()) return Promise.reject(new Error('Sin servidor'));
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 40000);
+  /* Sin cabecera Content-Type: así es una petición simple y no hay bloqueo CORS */
+  return fetch(GAS_API_URL, {method:'POST', body: JSON.stringify({action: fn, arg: arg}), signal: ctrl.signal})
+    .then(r => { if(!r.ok) throw new Error('Servidor ' + r.status); return r.json(); })
+    .catch(e => { throw (e && e.name === 'AbortError') ? new Error('Tiempo agotado') : e; })
+    .finally(()=>clearTimeout(t));
+}
+
+let saveTimer = null, saveAgain = false;
 function salvaDatiCloud(){
-  if(!isGasEnv()) return;
-  hasPendingLocalWrite = true;
-  if(isSaving) return;
+  if(!isGasEnv() && !webSyncEnabled()) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(pushStore, isGasEnv() ? 0 : 700);
+}
+function pushStore(){
+  if(isSaving){ saveAgain = true; return; }
   isSaving = true;
-  const payload = JSON.stringify(store);
-  hasPendingLocalWrite = false;
   showSyncIndicator('Guardando…');
-  google.script.run
-    .withSuccessHandler(function(){
-      isSaving = false;
-      if(hasPendingLocalWrite){ hasPendingLocalWrite = false; salvaDatiCloud(); }
+  serverRun('salvaDatiNelFoglio', JSON.stringify(store))
+    .then(res => {
+      if(res && res.success === false) throw new Error(res.error || 'Error del servidor');
+      showSyncIndicator('☁️ Guardado');
     })
-    .withFailureHandler(function(err){
-      isSaving = false;
+    .catch(err => {
       console.error('Error al guardar en la nube:', err);
-      showSyncIndicator('⚠️ No se pudo guardar');
+      showSyncIndicator('⚠️ No se pudo guardar');   // se reintenta en la próxima sincronización
     })
-    .salvaDatiNelFoglio(payload);
+    .finally(() => {
+      isSaving = false;
+      if(saveAgain){ saveAgain = false; pushStore(); }
+    });
 }
 
 function caricaDatiCloud(){
-  if(!isGasEnv()) return;
+  if(!isGasEnv() && !webSyncEnabled()) return;
   if(isSyncing || isSaving) return;
   isSyncing = true;
-  google.script.run
-    .withSuccessHandler(function(data){
-      isSyncing = false;
-      if(data && data.beniopen_data){
-        try{
-          const remoteStore = normalizeStore(JSON.parse(data.beniopen_data));
-          if(JSON.stringify(remoteStore) !== JSON.stringify(store)){
-            store = remoteStore;
-            try{ localStorage.setItem('beniopen_data', JSON.stringify(store)); }catch(e){}
-          }
-        }catch(e){
-          console.error('Datos remotos invalidos:', e);
-        }
+
+  const req = isGasEnv()
+    ? serverRun('leggiDatiCloud')
+    : fetchWithTimeout(GAS_API_URL + '?api=load&t=' + Date.now(), 25000)
+        .then(r => { if(!r.ok) throw new Error('Servidor ' + r.status); return r.json(); })
+        .then(res => { if(!res || res.success === false) throw new Error((res && res.error) || 'Error'); return {beniopen_data: res.data}; });
+
+  req.then(data => {
+      const localRev = store._rev || 0;
+      if(!data || !data.beniopen_data){
+        if(localRev > 0) pushStore();                    // la nube está vacía: sube lo que hay aquí
+        return;
+      }
+      let remote;
+      try{ remote = normalizeStore(JSON.parse(data.beniopen_data)); }
+      catch(e){ console.error('Datos remotos inválidos:', e); return; }
+      const remoteRev = remote._rev || 0;
+
+      if(remoteRev > localRev || (localRev === 0 && JSON.stringify(remote) !== JSON.stringify(store))){
+        store = remote;                                  // la nube es más reciente: se adopta
+        try{ localStorage.setItem('beniopen_data', JSON.stringify(store)); }catch(e){}
+        refreshAll();
+        showSyncIndicator('☁️ Datos actualizados');
+      } else if(localRev > remoteRev){
+        pushStore();                                     // lo local es más reciente: se sube
       }
     })
-    .withFailureHandler(function(err){
-      isSyncing = false;
-    })
-    .leggiDatiCloud();
+    .catch(err => console.warn('Sincronización:', err))
+    .finally(() => { isSyncing = false; });
 }
 
 /* ---------- PWA: service worker ---------- */
@@ -1876,18 +1907,20 @@ if ('serviceWorker' in navigator && !isGasEnv()) {
 /* ---------- Init ---------- */
 try { renderInicio(); } catch(e) { console.error('[Beniopen] renderInicio error:', e); }
 
-if(isGasEnv()){
+if(isGasEnv() || webSyncEnabled()){
+  const SYNC_MS = isGasEnv() ? 8000 : 20000;
   caricaDatiCloud();
-  let syncTimer = setInterval(caricaDatiCloud, 8000);
+  let syncTimer = setInterval(caricaDatiCloud, SYNC_MS);
 
   document.addEventListener('visibilitychange', function(){
     if(document.hidden){
       clearInterval(syncTimer);
     } else {
       caricaDatiCloud();
-      syncTimer = setInterval(caricaDatiCloud, 8000);
+      syncTimer = setInterval(caricaDatiCloud, SYNC_MS);
     }
   });
+  window.addEventListener('online', caricaDatiCloud);
 }
 </script>
 </body>
