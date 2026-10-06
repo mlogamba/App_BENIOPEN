@@ -345,6 +345,10 @@ input:focus, textarea:focus, select:focus{outline:none; border-color:var(--court
       <button type="button" class="btn court" onclick="openLiveResultsModal('B')">🏁 Resultados</button>
     </div>
     <p class="hint" style="padding:0 6px 8px;">Cada partido vale 3 puntos si ganas y 1 si pierdes. Toca un partido para editarlo.</p>
+    <div class="card">
+      <div class="hint" id="sync-status" style="margin:0 0 10px;">☁️ Sincronización: iniciando…</div>
+      <button type="button" class="btn ghost small" onclick="forceSync()" style="width:100%;">☁️ Sincronizar ahora</button>
+    </div>
   </section>
 
   <!-- CALENDARIO -->
@@ -1826,8 +1830,29 @@ function serverRun(fn, arg){
   /* Sin cabecera Content-Type: así es una petición simple y no hay bloqueo CORS */
   return fetch(GAS_API_URL, {method:'POST', body: JSON.stringify({action: fn, arg: arg}), signal: ctrl.signal})
     .then(r => { if(!r.ok) throw new Error('Servidor ' + r.status); return r.json(); })
-    .catch(e => { throw (e && e.name === 'AbortError') ? new Error('Tiempo agotado') : e; })
+    .catch(e => {
+      if(e && e.name === 'AbortError') throw new Error('Tiempo agotado');
+      if(fn === 'salvaDatiNelFoglio'){   // respaldo: envío sin leer la respuesta (el servidor lo recibe igualmente)
+        return fetch(GAS_API_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({action: fn, arg: arg})})
+          .then(() => ({success:true, opaque:true}));
+      }
+      throw e;
+    })
     .finally(()=>clearTimeout(t));
+}
+
+function hhmm(){ return new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit', second:'2-digit'}); }
+function setSyncStatus(ok, msg){
+  const el = document.getElementById('sync-status');
+  if(!el) return;
+  el.innerHTML = (ok ? '✅ ' : '❌ ') + '<b>Sincronización:</b> ' + escapeHtml(msg);
+  el.style.color = ok ? 'var(--win)' : 'var(--loss)';
+}
+function forceSync(){
+  if(!isGasEnv() && !webSyncEnabled()){ setSyncStatus(false, 'falta configurar GAS_API_URL en index.html'); return; }
+  setSyncStatus(true, 'sincronizando…');
+  isSyncing = false;
+  caricaDatiCloud();
 }
 
 let saveTimer = null, saveAgain = false;
@@ -1843,16 +1868,23 @@ function pushStore(){
   serverRun('salvaDatiNelFoglio', JSON.stringify(store))
     .then(res => {
       if(res && res.success === false) throw new Error(res.error || 'Error del servidor');
-      showSyncIndicator('☁️ Guardado');
+      showSyncIndicator('☁️ Guardado'); setSyncStatus(true, 'guardado en la nube a las ' + hhmm());
     })
     .catch(err => {
       console.error('Error al guardar en la nube:', err);
-      showSyncIndicator('⚠️ No se pudo guardar');   // se reintenta en la próxima sincronización
+      showSyncIndicator('⚠️ No se pudo guardar'); setSyncStatus(false, 'no se pudo guardar (' + ((err && err.message) || err) + ')');
     })
     .finally(() => {
       isSaving = false;
       if(saveAgain){ saveAgain = false; pushStore(); }
     });
+}
+
+/* JSON con claves ordenadas, para comparar contenidos sin falsos positivos */
+function stable(o){
+  return JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v))
+    ? Object.keys(v).sort().reduce((a, x) => (a[x] = v[x], a), {})
+    : v);
 }
 
 function caricaDatiCloud(){
@@ -1867,6 +1899,7 @@ function caricaDatiCloud(){
         .then(res => { if(!res || res.success === false) throw new Error((res && res.error) || 'Error'); return {beniopen_data: res.data}; });
 
   req.then(data => {
+      setSyncStatus(true, 'conectado, última comprobación a las ' + hhmm());
       const localRev = store._rev || 0;
       if(!data || !data.beniopen_data){
         if(localRev > 0) pushStore();                    // la nube está vacía: sube lo que hay aquí
@@ -1877,7 +1910,8 @@ function caricaDatiCloud(){
       catch(e){ console.error('Datos remotos inválidos:', e); return; }
       const remoteRev = remote._rev || 0;
 
-      if(remoteRev > localRev || (localRev === 0 && JSON.stringify(remote) !== JSON.stringify(store))){
+      const differs = stable(remote) !== stable(store);
+      if(remoteRev > localRev || (remoteRev === localRev && differs)){   // empate con datos distintos: manda la nube
         store = remote;                                  // la nube es más reciente: se adopta
         try{ localStorage.setItem('beniopen_data', JSON.stringify(store)); }catch(e){}
         refreshAll();
@@ -1886,7 +1920,7 @@ function caricaDatiCloud(){
         pushStore();                                     // lo local es más reciente: se sube
       }
     })
-    .catch(err => console.warn('Sincronización:', err))
+    .catch(err => { console.warn('Sincronización:', err); setSyncStatus(false, 'no se pudo leer la nube (' + ((err && err.message) || err) + ')'); })
     .finally(() => { isSyncing = false; });
 }
 
@@ -1907,6 +1941,7 @@ if ('serviceWorker' in navigator && !isGasEnv()) {
 /* ---------- Init ---------- */
 try { renderInicio(); } catch(e) { console.error('[Beniopen] renderInicio error:', e); }
 
+if(!isGasEnv() && !webSyncEnabled()) setSyncStatus(false, 'desactivada: falta GAS_API_URL en index.html');
 if(isGasEnv() || webSyncEnabled()){
   const SYNC_MS = isGasEnv() ? 8000 : 20000;
   caricaDatiCloud();
