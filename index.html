@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1,
+               maximum-scale=1, viewport-fit=cover">
+
+<title>Beniopen · Segunda B</title>
+
+<link rel="manifest" href="<?= manifestUrl ?>">
+
+<link rel="icon" type="image/png" sizes="192x192" href="<?= icon192 ?>">
+<link rel="icon" type="image/png" sizes="512x512" href="<?= icon512 ?>">
+<link rel="apple-touch-icon" sizes="192x192" href="<?= icon192 ?>">
+
+<meta name="theme-color" content="#0f5a4d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Beniopen">
+<meta name="format-detection" content="telephone=no">
+
+<style>
+:root{
+  --court:#0f5a4d; --court-dark:#0a3f36; --court-soft:#e0eee9;
+  --ball:#d7ea3a; --ball-ink:#2a3300;
+  --bg:#f1f5f3; --surface:#ffffff; --surface-2:#e8eeeb;
+  --ink:#14211d; --muted:#586661; --line:#d9e2de;
+  --win:#1c8554; --win-bg:#dcf2e5;
+  --loss:#bf3a2c; --loss-bg:#fbe2de;
+  --sched:#2b5cc4; --sched-bg:#e0e9fb;
+  --todo:#6b6f68; --todo-bg:#ecebe4;
+  --shadow:0 1px 2px rgba(15,40,34,.08), 0 6px 18px rgba(15,40,34,.07);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+
+html{
+  width:100%;
+  overflow-x:hidden;
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+}
+body{
+  width:100%;
+  min-width:0;
+  min-height:100vh;
+  min-height:100dvh;
+  margin:0;
+  padding:0 0 calc(96px + env(safe-area-inset-bottom, 0px));
+  background:var(--bg);
+  color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px;
+}
+
+button,a,input,select,textarea{touch-action:manipulation;}
+
+main{
+  width:100%;
+  max-width:820px;
+  min-width:0;
+  margin:0 auto;
+  padding:14px 12px 24px;
+}
+
+/* ---------- Schede: solo quella attiva è visibile ---------- */
+.view{display:none; width:100%; min-width:0;}
+.view.active{display:block;}
+
+img,iframe,video{max-width:100%;}
+h1,h2,h3{margin:0; font-weight:800; letter-spacing:-.01em;}
+h3{font-size:18px; margin-bottom:6px;}
+p{margin:0;}
+.opp-name,.row-sub,.cal-meta,.msgbox,.note-line,.priv-note p,.meta{overflow-wrap:anywhere; word-break:break-word;}
+
+/* ---------- Cabecera ---------- */
+header.top{
+  position:relative; overflow:hidden; background:var(--court); color:#fff;
+  padding:calc(18px + env(safe-area-inset-top,0px)) 18px 22px;
+  border-radius:0 0 22px 22px;
+  display:flex; align-items:center; gap:14px; width:100%;
+}
+header.top::before{content:""; position:absolute; inset:10px; border:2px solid rgba(255,255,255,.10); border-radius:14px; pointer-events:none;}
+.ball{width:46px; height:46px; border-radius:50%; background:var(--ball); position:relative; overflow:hidden; flex:none;}
+.ball::before,.ball::after{content:""; position:absolute; top:0; width:46px; height:46px; border-radius:50%; border:2px solid rgba(255,255,255,.75);}
+.ball::before{left:-32px;} .ball::after{right:-32px;}
+header.top h1{font-size:26px; line-height:1.1;}
+header.top p{font-size:14.5px; opacity:.85; margin-top:3px;}
+.head-text{min-width:0; position:relative;}
+
+.sync-indicator{position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); right:12px; font-size:13px; font-weight:700; background:var(--ball); color:var(--ball-ink); padding:6px 12px; border-radius:99px; z-index:20; opacity:0; transition:opacity .25s; box-shadow:var(--shadow);}
+.sync-indicator.show{opacity:1;}
+
+/* ---------- Barra de pestañas ---------- */
+.tabs{
+  position:fixed;
+  left:8px; right:8px;
+  bottom:calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index:100;
+  display:flex; gap:3px;
+  width:auto; max-width:680px;
+  margin:0 auto; padding:6px;
+  background:rgba(255,255,255,.96);
+  border:1px solid var(--line);
+  border-radius:18px;
+  box-shadow:0 4px 18px rgba(15,40,34,.22);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+.tab{
+  flex:1 1 0; min-width:0; min-height:56px;
+  padding:5px 2px; border:0; border-radius:13px;
+  background:transparent; color:var(--muted);
+  font-size:clamp(10px, 2.8vw, 12px);
+  font-weight:700; line-height:1.1; white-space:nowrap;
+  font-family:inherit;
+}
+.tab .ic{display:block; margin-bottom:3px; font-size:clamp(19px, 5.5vw, 24px); line-height:1.1;}
+.tab.active{color:var(--ball); background:var(--court);}
+
+/* ---------- Tarjetas y secciones ---------- */
+.card,.match,.cal-card,.score-card,.next-card{width:100%; min-width:0; max-width:100%;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow);}
+.card h3 .count{font-weight:600; color:var(--muted); font-size:15px;}
+.empty{text-align:center; color:var(--muted); padding:22px 10px; font-size:15px;}
+.hint{font-size:14px; color:var(--muted); margin-top:6px; line-height:1.45;}
+.divider{height:1px; background:var(--line); margin:16px 0;}
+h3.month{font-size:15px; color:var(--muted); font-weight:700; margin:18px 4px 8px; text-transform:capitalize;}
+h3.month:first-child{margin-top:4px;}
+
+/* Marcador */
+.score-card{background:var(--court-dark); color:#fff; border-radius:18px; padding:14px 8px; margin-bottom:12px; display:grid; grid-template-columns:repeat(3,1fr); box-shadow:var(--shadow);}
+.score-card .st{text-align:center; padding:2px 6px;}
+.score-card .st + .st{border-left:1px solid rgba(255,255,255,.18);}
+.score-card b{display:block; font-size:34px; line-height:1.1; font-weight:800; color:var(--ball); font-variant-numeric:tabular-nums;}
+.score-card span{font-size:13.5px; color:rgba(255,255,255,.8); font-weight:600;}
+
+/* Siguiente jornada */
+.next-card{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:16px; margin-bottom:12px; box-shadow:var(--shadow);}
+.next-card .opp{font-size:23px; font-weight:800; margin:6px 0 4px; line-height:1.15;}
+.next-card .when{font-size:15px; color:var(--muted); margin-bottom:4px;}
+
+/* Pills */
+.pill{display:inline-block; font-size:13px; font-weight:700; padding:4px 11px; border-radius:99px; white-space:nowrap;}
+.pill.win{background:var(--win-bg); color:var(--win);}
+.pill.loss{background:var(--loss-bg); color:var(--loss);}
+.pill.sched{background:var(--sched-bg); color:var(--sched);}
+.pill.todo{background:var(--todo-bg); color:var(--todo);}
+.pill.wo{outline:1.5px dashed currentColor; outline-offset:-1.5px;}
+.pill.jor{background:var(--court-soft); color:var(--court);}
+
+/* Filas compactas (Inicio) */
+.row{display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); cursor:pointer;}
+.row:last-child{border-bottom:none; padding-bottom:2px;}
+.row:first-of-type{padding-top:6px;}
+.row-body{flex:1; min-width:0;}
+.opp-name{font-size:17px; font-weight:800; line-height:1.2;}
+.opp-name small{font-size:13px; font-weight:700; color:var(--muted); margin-left:6px;}
+.opp-name small.rk{color:var(--court);}
+.row-sub{font-size:14.5px; color:var(--muted); margin-top:2px;}
+.jchip{flex:none; width:52px; text-align:center; font-weight:800; font-size:16px; padding:10px 0; border-radius:12px;}
+.jchip.win{background:var(--win-bg); color:var(--win);}
+.jchip.loss{background:var(--loss-bg); color:var(--loss);}
+
+/* Bloque de fecha */
+.dateblk{flex:none; width:54px; border-radius:12px; padding:6px 0 5px; text-align:center; line-height:1.1;}
+.dateblk b{display:block; font-size:24px; font-weight:800; font-variant-numeric:tabular-nums;}
+.dateblk span{font-size:13px; font-weight:700;}
+.dateblk.win{background:var(--win-bg); color:var(--win);}
+.dateblk.loss{background:var(--loss-bg); color:var(--loss);}
+.dateblk.sched{background:var(--sched-bg); color:var(--sched);}
+
+/* Tarjetas de calendario */
+.cal-card{display:flex; gap:12px; background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:14px; margin-bottom:12px; box-shadow:var(--shadow);}
+.cal-body{flex:1; min-width:0;}
+.cal-meta{font-size:15px; color:var(--ink); margin-top:4px;}
+.cal-res{display:inline-block; margin-top:8px; font-size:15px; font-weight:800; padding:5px 11px; border-radius:10px; font-variant-numeric:tabular-nums;}
+.cal-res.win{background:var(--win-bg); color:var(--win);}
+.cal-res.loss{background:var(--loss-bg); color:var(--loss);}
+.cal-res.sched{background:var(--sched-bg); color:var(--sched);}
+.cal-card .row-actions{margin-top:10px;}
+
+/* Partidas */
+.match{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:15px; margin-bottom:12px; box-shadow:var(--shadow);}
+.match .head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+.match .head b{font-size:18px; line-height:1.2; overflow-wrap:anywhere;}
+.match .meta{font-size:14.5px; color:var(--muted); margin-top:6px;}
+.match .score{font-size:16px; margin-top:8px; font-weight:800; color:var(--court);}
+.note-line{font-size:14px; color:var(--muted); margin-top:8px;}
+.priv-note{margin-top:10px; background:var(--ball); color:var(--ball-ink); border-radius:12px; padding:10px 12px;}
+.priv-note b{font-size:13.5px; display:block; margin-bottom:2px;}
+.priv-note p{font-size:15px; white-space:pre-wrap;}
+
+/* Botones */
+.row-actions{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;}
+.row-actions.free{display:flex; flex-wrap:wrap;}
+button.btn, a.btn{
+  border:none; border-radius:12px; padding:11px 12px; font-size:15px; font-weight:700; font-family:inherit;
+  cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:6px; color:#fff;
+  min-height:46px; text-align:center; line-height:1.2;
+}
+.btn.primary{background:var(--ball); color:var(--ball-ink);}
+.btn.court{background:var(--court);}
+.btn.wa{background:#1f8a4c;}
+.btn.mail{background:#3d4f9a;}
+.btn.cal{background:var(--sched);}
+.btn.ghost{background:var(--surface); color:var(--ink); border:1.5px solid var(--line);}
+.btn.ghost.danger{color:var(--loss); border-color:rgba(191,58,44,.4);}
+.btn.small{min-height:44px; font-size:14.5px;}
+.btn:active{transform:scale(.97); opacity:.9;}
+.btn:disabled{opacity:.5; cursor:not-allowed; transform:none;}
+.row-actions .span2{grid-column:1/-1;}
+.form-actions{display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px;}
+.close-x{background:none; border:none; font-size:26px; color:var(--muted); cursor:pointer; line-height:1; padding:6px 10px; min-height:44px;}
+
+/* Formularios */
+label{display:block; font-size:14.5px; color:var(--muted); margin:14px 0 6px; font-weight:700;}
+input[type=text], input[type=date], input[type=time], input[type=number], select, textarea{
+  width:100%; padding:12px 14px; border:1.5px solid var(--line); border-radius:12px; font-size:16px; font-family:inherit;
+  background:var(--surface); color:var(--ink); min-height:50px;
+}
+textarea{resize:vertical; min-height:96px; line-height:1.4;}
+select{-webkit-appearance:none; appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%23586661' stroke-width='2' fill='none' fill-rule='evenodd'/></svg>");
+  background-repeat:no-repeat; background-position:right 14px center; padding-right:38px;}
+input:focus, textarea:focus, select:focus{outline:none; border-color:var(--court); box-shadow:0 0 0 3px rgba(15,90,77,.18);}
+.btn:focus-visible,.tab:focus-visible,.chip:focus-visible,.row:focus-visible{outline:3px solid var(--sched); outline-offset:2px;}
+.inputs2col{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.set-row{margin:10px 0;}
+.set-row .lab{font-size:14px; color:var(--muted); margin-bottom:4px; display:flex; justify-content:space-between; align-items:center; font-weight:600;}
+.set-remove{background:transparent; border:1px solid var(--line); border-radius:8px; color:var(--muted); font-size:13px; padding:6px 10px; cursor:pointer; min-height:36px;}
+.msgbox{background:var(--surface-2); border-radius:12px; padding:13px 15px; font-size:15.5px; white-space:pre-wrap; margin-top:12px; line-height:1.45;}
+
+/* Selector de hora */
+.time-picker{display:flex; align-items:stretch; gap:8px;}
+.time-step{flex:0 0 52px; border:1.5px solid var(--line); background:var(--surface-2); color:var(--court); border-radius:12px; font-size:24px; font-weight:800; cursor:pointer; line-height:1; min-height:50px;}
+.time-step:active{background:var(--line);}
+.time-input{flex:1; min-width:0; text-align:center; font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; padding-left:8px; padding-right:8px;}
+.time-chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px;}
+.chip{border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font-size:14.5px; font-weight:700; padding:8px 14px; border-radius:99px; cursor:pointer; min-height:40px; font-family:inherit;}
+.chip:active{background:var(--court-soft);}
+
+/* Pistas */
+.court-row{border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:10px; background:var(--surface-2);}
+.court-row input{margin-bottom:8px;}
+.custom-court-box{border:1.5px dashed var(--line); border-radius:14px; padding:12px; margin-top:8px; background:var(--surface-2);}
+.custom-court-box input{margin-bottom:8px;}
+.campo-field{display:flex; gap:8px; align-items:stretch;}
+.campo-field select{flex:1; min-width:0;}
+.campo-field .btn{flex:none;}
+
+/* Componentes de Filtro de Resultados y Clasificación en Vivo */
+.group-chips{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 14px;}
+.group-chip{border:1.5px solid var(--line); background:var(--surface-2); color:var(--ink); font-size:13px; font-weight:700; padding:6px 12px; border-radius:99px; cursor:pointer; font-family:inherit; transition:all .15s;}
+.group-chip.active{background:var(--court); color:#fff; border-color:var(--court);}
+.res-live-card{background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.res-live-text{font-size:15px; font-weight:600; line-height:1.35; flex:1;}
+.res-group-badge{font-size:12px; font-weight:800; background:var(--court-soft); color:var(--court); padding:3px 8px; border-radius:8px; flex:none;}
+
+/* Tabla Clasificación */
+.clas-table{width:100%; border-collapse:collapse; margin-top:8px; font-size:14px;}
+.clas-table th{background:var(--court-dark); color:#fff; padding:9px 6px; font-size:13px; font-weight:700;}
+.clas-table td{padding:10px 6px; border-bottom:1px solid var(--line); text-align:center;}
+.clas-table tr.highlight{background:var(--court-soft); font-weight:800; color:var(--court-dark);}
+.clas-table tr.highlight td{border-bottom:2px solid var(--court);}
+
+/* Modal (hoja inferior) */
+.modal-bg{position:fixed; inset:0; background:rgba(10,20,17,.6); display:none; align-items:flex-end; justify-content:center; z-index:200;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface); width:100%; max-width:680px; border-radius:22px 22px 0 0; padding:18px 16px; max-height:92vh; max-height:92dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));}
+.modal .mh{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;}
+.modal .mh h3{font-size:19px; margin:0; min-width:0; overflow-wrap:anywhere;}
+
+/* ---------- Modo oscuro ---------- */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1512; --surface:#16221d; --surface-2:#1e2c26; --ink:#eaf2ee; --muted:#9db0a8; --line:#2a3a33;
+    --court-soft:#17302a; --court:#2a8f7c;
+    --win:#5fd09a; --win-bg:#163a29; --loss:#ff8f80; --loss-bg:#40201c; --sched:#8fb0ff; --sched-bg:#1b2c52;
+    --todo:#b8bbb0; --todo-bg:#2a2c26;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+  :root:not([data-theme="light"]) header.top{background:#0f5a4d;}
+  :root:not([data-theme="light"]) .btn.court{background:#13705f;}
+  :root:not([data-theme="light"]) .btn.cal{background:#2b5cc4; color:#fff;}
+  :root:not([data-theme="light"]) .tab.active{background:#0f5a4d;}
+  :root:not([data-theme="light"]) .tabs{background:rgba(22,34,29,.96);}
+  select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9'><path d='M1 1l6 6 6-6' stroke='%239db0a8' stroke-width='2' fill='none' fill-rule='evenodd'/></svg>");}
+}
+:root[data-theme="dark"]{
+  --bg:#0d1512; --surface:#16221d; --surface-2:#1e2c26; --ink:#eaf2ee; --muted:#9db0a8; --line:#2a3a33;
+  --court-soft:#17302a; --court:#2a8f7c;
+  --win:#5fd09a; --win-bg:#163a29; --loss:#ff8f80; --loss-bg:#40201c; --sched:#8fb0ff; --sched-bg:#1b2c52;
+  --todo:#b8bbb0; --todo-bg:#2a2c26;
+}
+
+/* ---------- Pantallas grandes ---------- */
+@media (min-width:700px){
+  body{font-size:17px;}
+  main{padding:22px 22px 24px;}
+  .tabs{max-width:820px;}
+  .modal{max-width:720px; border-radius:24px; padding:24px;}
+  .form-actions{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));}
+}
+@media (max-width:699px){
+  .modal{max-height:90dvh; overflow-y:auto;}
+}
+@media (max-width:380px){
+  main{padding-left:9px; padding-right:9px;}
+  .tabs{left:5px; right:5px; padding:4px;}
+  .tab{min-height:52px; font-size:10px;}
+  .tab .ic{font-size:19px;}
+  header.top{padding-left:14px; padding-right:14px;}
+  header.top h1{font-size:22px;}
+}
+</style>
+</head>
+<body>
+
+<div class="sync-indicator" id="sync-indicator">Sincronizzando…</div>
+
+<header class="top">
+  <div class="ball" aria-hidden="true"></div>
+  <div class="head-text">
+    <h1>37º Beniopen</h1>
+    <p>Segunda B · Marcello Gambardella</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- INICIO -->
+  <section id="view-inicio" class="view active">
+    <div class="score-card">
+      <div class="st"><b id="st-points">0</b><span>Puntos</span></div>
+      <div class="st"><b id="st-played">0/11</b><span>Jugados</span></div>
+      <div class="st"><b id="st-wins">0</b><span>Victorias</span></div>
+    </div>
+    <div id="next-wrap"></div>
+    <div class="card" id="home-played"></div>
+    <div class="card" id="home-sched"></div>
+    <div class="row-actions" style="margin-bottom:12px;">
+      <button type="button" class="btn court" onclick="openLiveClasificacionModal('segunda-b')">📊 Clasificación</button>
+      <button type="button" class="btn court" onclick="openLiveResultsModal('B')">🏁 Resultados</button>
+    </div>
+    <p class="hint" style="padding:0 6px 8px;">Cada partido vale 3 puntos si ganas y 1 si pierdes. Toca un partido para editarlo.</p>
+  </section>
+
+  <!-- CALENDARIO -->
+  <section id="view-calendario" class="view">
+    <div id="cal-list"></div>
+  </section>
+
+  <!-- PARTIDAS -->
+  <section id="view-partidas" class="view">
+    <div id="matches-list"></div>
+  </section>
+
+  <!-- INVITAR -->
+  <section id="view-invitar" class="view">
+    <div class="card">
+      <h3>Proponer partido</h3>
+      <label>Rival</label>
+      <select id="inv-opp"></select>
+      <label>Fecha propuesta</label>
+      <input type="date" id="inv-date">
+      <label>Hora propuesta</label>
+      <div class="time-picker">
+        <button type="button" class="time-step" onclick="stepTime('inv-time',-15)" aria-label="Menos 15 minutos">−</button>
+        <input type="time" class="time-input" id="inv-time" value="18:00" step="300">
+        <button type="button" class="time-step" onclick="stepTime('inv-time',15)" aria-label="Más 15 minutos">+</button>
+      </div>
+      <div class="time-chips" id="inv-time-chips"></div>
+      <label>Pista / club</label>
+      <div class="campo-field">
+        <select id="inv-campo" class="campo-select" onchange="handleCampoChange('inv-campo')"></select>
+        <button type="button" class="btn ghost small" onclick="showView('pista')">⚙️ Pistas</button>
+      </div>
+      <div id="inv-campo-custom-wrap" class="custom-court-box" style="display:none;">
+        <input type="text" id="inv-campo-newname" placeholder="Nombre de la pista">
+        <input type="text" id="inv-campo-newaddr" placeholder="Dirección / referencia de Google Maps (opcional)">
+        <button type="button" class="btn primary small" onclick="addCourtInline('inv-campo')" style="width:100%;">➕ Añadir y usar esta pista</button>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" onclick="generarInvitacion()">Generar mensaje</button>
+      </div>
+      <div id="inv-msgbox"></div>
+      <div id="inv-send" class="row-actions free"></div>
+    </div>
+  </section>
+
+  <!-- PISTA -->
+  <section id="view-pista" class="view">
+    <div class="card">
+      <h3>Reserva de pistas de tenis</h3>
+      <p class="hint" style="margin:4px 0 4px;">
+        Selecciona una instalación para abrir directamente su reserva online en una nueva pestaña.
+      </p>
+
+      <div class="row-actions" style="grid-template-columns:1fr;">
+        <a class="btn court small" href="https://mislata.apuntate.online/pio/instalaciones.xhtml?area=40" target="_blank" rel="noopener">🎾 La Canaleta · Mislata</a>
+        <a class="btn court small" href="https://enjoyvalenciaclubesoutdoor.reservaplay.com/reserves/cal_week.php" target="_blank" rel="noopener">🎾 Enjoy! Samaranch</a>
+        <a class="btn court small" href="https://drlluch.pistacentral.es/reservas" target="_blank" rel="noopener">🎾 Poliesportiu Dr. Lluch</a>
+        <a class="btn court small" href="https://boixteam.es/booking-gran-via" target="_blank" rel="noopener">🎾 Boix Team · Gran Vía</a>
+        <a class="btn court small" href="https://www.lliria.es/es/seccion/deporte" target="_blank" rel="noopener">🎾 Poliesportiu El Canó · Llíria</a>
+        <a class="btn court small" href="https://valenciateniscenter.matchpoint.com.es/" target="_blank" rel="noopener">🎾 Valencia Tennis Center · Malvarrosa</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Mis pistas guardadas</h3>
+      <p class="hint" style="margin:4px 0 12px;">
+        Estas pistas aparecen en el desplegable al programar un partido o crear una invitación.
+        Corrige la dirección de cada una (para que "Ver en Maps" lleve al sitio exacto) o añade nuevas.
+      </p>
+      <div id="courts-manager"></div>
+      <div class="divider"></div>
+      <label>Nueva pista</label>
+      <input type="text" id="new-court-name" placeholder="Nombre de la pista">
+      <label>Dirección / referencia de Google Maps</label>
+      <input type="text" id="new-court-addr" placeholder="Ej: FHHP+P6, Mislata, València">
+      <div class="form-actions">
+        <button class="btn primary" onclick="addCourtFromManager()">➕ Añadir pista</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button class="tab active" data-view="inicio" onclick="showView('inicio')"><span class="ic">🏠</span>Inicio</button>
+  <button class="tab" data-view="calendario" onclick="showView('calendario')"><span class="ic">📆</span>Calendario</button>
+  <button class="tab" data-view="partidas" onclick="showView('partidas')"><span class="ic">📋</span>Partidas</button>
+  <button class="tab" data-view="invitar" onclick="showView('invitar')"><span class="ic">✉️</span>Invitar</button>
+  <button class="tab" data-view="pista" onclick="showView('pista')"><span class="ic">🏟️</span>Pista</button>
+</nav>
+
+<!-- MODAL: programar / registrar / nota privada / resultados / clasificación -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="mh">
+      <h3 id="modal-title">Partido</h3>
+      <button class="close-x" onclick="closeModal()" aria-label="Cerrar">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+/* ---------- Datos fijos del torneo ---------- */
+const ORG = {phone:"34637207632", email:"beniopen@yahoo.es"};
+const PLAYERS = {
+  "Amalio Mota":       {phone:"676965274",  email:"amaliomota@hotmail.com"},
+  "Vale T.":            {phone:"624056765",  email:"vale.terra@gmail.com"},
+  "Miguel Arellano":    {phone:"651354393",  email:"miarellano7@gmail.com"},
+  "Tim Fedeseev":       {phone:"624559932",  email:"tim.fedeseev@gmail.com"},
+  "Mauricio Senebre":   {phone:"605899884",  email:"maurosenabre@gmail.com"},
+  "Juan C. Arias":      {phone:"655849981",  email:"jcap155@hotmail.com"},
+  "Javier Herrero":     {phone:"636762304",  email:"javencia@yahoo.es"},
+  "Ramón Andrés":       {phone:"625788400",  email:"midavido1966@gmail.com"},
+  "Raúl Ruiz":          {phone:"+34626121666",  email:"rarugon80@hotmail.com"},
+  "Juan B. Esteve":     {phone:"607284167",  email:"juanbautista.esteve@berner.es"},
+  "Luis Neira":         {phone:"652096096",  email:"infoluisneira@gmail.com"}
+};
+/* Posizione nel Ranking Actual (ediciones XVII y XVIII) - https://www.beniopen.es/ranking-beniopen/actual/ */
+const RANKING = {
+  "Javier Herrero": 33
+};
+function rankOf(opp){ return RANKING[opp] || null; }
+function rankChip(opp){ const r = rankOf(opp); return r ? `<small class="rk">🏅 nº${r}</small>` : ''; }
+function rankLine(opp){ const r = rankOf(opp); return r ? `<div class="when">🏅 Ranking actual: nº ${r}</div>` : ''; }
+
+const FIXTURE = [
+  {n:1,  periodo:"22–28 sep",      opp:"Amalio Mota"},
+  {n:2,  periodo:"29 sep – 5 oct",  opp:"Vale T."},
+  {n:3,  periodo:"6–12 oct",       opp:"Miguel Arellano"},
+  {n:4,  periodo:"13–19 oct",      opp:"Tim Fedeseev"},
+  {n:5,  periodo:"20–26 oct",      opp:"Mauricio Senebre"},
+  {n:6,  periodo:"27 oct – 2 nov",  opp:"Juan C. Arias"},
+  {n:7,  periodo:"3–9 nov",        opp:"Javier Herrero"},
+  {n:8,  periodo:"10–16 nov",      opp:"Ramón Andrés"},
+  {n:9,  periodo:"17–23 nov",      opp:"Raúl Ruiz"},
+  {n:10, periodo:"24–30 nov",      opp:"Juan B. Esteve"},
+  {n:11, periodo:"1–10 dic",       opp:"Luis Neira"}
+];
+
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const DIAS = ['dom','lun','mar','mié','jue','vie','sáb'];
+
+const DEFAULT_COURTS = [
+  {id:"c_canaleta",   name:"La Canaleta · Mislata",                 address:"FHHP+P6, Mislata, València"},
+  {id:"c_samaranch",  name:"Enjoy! Samaranch",                      address:"Enjoy! Valencia Clubes Outdoor, València"},
+  {id:"c_drlluch",    name:"Poliesportiu Dr. Lluch",                address:"Poliesportiu Dr. Lluch, València"},
+  {id:"c_boixteam",   name:"Boix Team · Gran Vía",                  address:"Boix Team, Gran Vía, València"},
+  {id:"c_lliria",     name:"Poliesportiu El Canó · Llíria",         address:"Poliesportiu El Canó, Llíria"},
+  {id:"c_vtc",        name:"Valencia Tennis Center · Malvarrosa",   address:"Valencia Tennis Center, Malvarrosa, València"}
+];
+
+/* ---------- Storage ---------- */
+let store = {matches:{}, cache:{campo:""}, courts:null, privNotes:{}};
+let isSaving = false;
+let isSyncing = false;
+let hasPendingLocalWrite = false;
+let cachedLiveResults = null;
+let currentLiveGroup = 'B';
+let cachedClasificacion = {};
+
+/* Caché persistente: si la web falla, se muestran los últimos datos buenos */
+const LIVE_LS = 'beniopen_live_cache';
+function loadLiveCache(){
+  try{
+    const o = JSON.parse(localStorage.getItem(LIVE_LS) || '{}');
+    if(o.clas) Object.keys(o.clas).forEach(k => { cachedClasificacion[k] = o.clas[k]; });
+    if(o.res && o.res.matches) cachedLiveResults = o.res;
+  }catch(e){}
+}
+function persistLiveCache(){
+  try{
+    const clas = {};
+    Object.keys(cachedClasificacion).forEach(k=>{
+      const c = cachedClasificacion[k];
+      if(c && c.rows && c.rows.length) clas[k] = {rows:c.rows, timestamp:c.timestamp, _fetchedAt:c._fetchedAt};
+    });
+    const r = cachedLiveResults;
+    localStorage.setItem(LIVE_LS, JSON.stringify({
+      clas: clas,
+      res: (r && r.matches) ? {matches:r.matches, timestamp:r.timestamp, _fetchedAt:r._fetchedAt} : null
+    }));
+  }catch(e){}
+}
+function staleNote(d){
+  if(!d || !d.stale) return '';
+  const dt = new Date(d._fetchedAt || Date.now()).toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+  return ' <b style="color:var(--loss)">⚠️ sin conexión con beniopen.es · datos guardados del ' + dt + '</b>';
+}
+loadLiveCache();
+let currentClasSlug = 'segunda-b';
+
+function normalizeStore(s){
+  if(!s || typeof s !== 'object') s = {};
+  if(!s.matches || typeof s.matches !== 'object') s.matches = {};
+  if(!s.cache || typeof s.cache !== 'object') s.cache = {campo:""};
+  if(!Array.isArray(s.courts) || s.courts.length === 0) s.courts = DEFAULT_COURTS.map(c=>({...c}));
+  if(!s.privNotes || typeof s.privNotes !== 'object') s.privNotes = {};
+  return s;
+}
+
+try{
+  const raw = localStorage.getItem('beniopen_data');
+  if(raw) store = JSON.parse(raw);
+}catch(e){}
+store = normalizeStore(store);
+
+function isGasEnv(){
+  return typeof google !== 'undefined' && google.script && google.script.run;
+}
+
+function showSyncIndicator(text){
+  const el = document.getElementById('sync-indicator');
+  if(!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(showSyncIndicator._t);
+  showSyncIndicator._t = setTimeout(()=>el.classList.remove('show'), 1500);
+}
+
+function save(){
+  try{
+    localStorage.setItem('beniopen_data', JSON.stringify(store));
+  }catch(e){}
+  salvaDatiCloud();
+}
+
+function defaultMatch(n){
+  return {n, opp:FIXTURE[n-1].opp, date:"", time:"", campo:"", campoAddress:"", played:false, resultType:"normal", sets:[["",""],["",""],["",""]], winner:"", notes:"", eventId:"", eventInvited:false};
+}
+function peekMatch(n){
+  const m = store.matches[n];
+  if(!m) return defaultMatch(n);
+  return Object.assign({eventId:"", eventInvited:false, campoAddress:"", sets:[["",""],["",""]]}, m);
+}
+function getMatch(n){
+  if(!store.matches[n]) store.matches[n] = defaultMatch(n);
+  const m = store.matches[n];
+  if(m.eventId === undefined) m.eventId = "";
+  if(m.eventInvited === undefined) m.eventInvited = false;
+  if(m.campoAddress === undefined) m.campoAddress = "";
+  return m;
+}
+function matchState(m){
+  if(m.played) return m.winner==='me' ? 'win' : 'loss';
+  if(m.date) return 'sched';
+  return 'todo';
+}
+function getPrivNote(opp){ return (store.privNotes && store.privNotes[opp]) || ''; }
+
+function refreshAll(){
+  renderInicio();
+  renderCalendario();
+  renderPartidas();
+}
+
+/* ---------- Navegación ---------- */
+function showView(v){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.querySelector('.tab[data-view="'+v+'"]').classList.add('active');
+  if(v==='inicio') renderInicio();
+  if(v==='calendario') renderCalendario();
+  if(v==='partidas') renderPartidas();
+  if(v==='invitar') renderInvitar();
+  if(v==='pista') renderCourtsManager();
+  try{ window.scrollTo(0,0); }catch(e){}
+}
+
+/* ---------- Utilidades mensajes ---------- */
+function waLink(phone, text){ return "https://wa.me/"+phone+"?text="+encodeURIComponent(text); }
+function mailLink(to, cc, subject, body){ return "mailto:"+to+"?cc="+encodeURIComponent(cc)+"&subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body); }
+function isIOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+function isAndroid(){ return /Android/i.test(navigator.userAgent); }
+function gmailWebLink(to, cc, subject, body){ return "https://mail.google.com/mail/?view=cm&fs=1&to="+encodeURIComponent(to)+"&cc="+encodeURIComponent(cc)+"&su="+encodeURIComponent(subject)+"&body="+encodeURIComponent(body); }
+function mapsSearchLink(query){ return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(query||''); }
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function copyText(text, btn){
+  const done = ()=>{ if(btn){ const old = btn.textContent; btn.textContent = "✅ Copiado"; setTimeout(()=>btn.textContent = old, 1500); } };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(()=>fallbackCopy(text,done)); }
+  else fallbackCopy(text, done);
+}
+function fallbackCopy(text, done){
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done(); }catch(e){}
+  document.body.removeChild(ta);
+}
+function fmtDate(d){ if(!d) return "por confirmar"; const [y,m,day]=d.split("-"); return day+"/"+m+"/"+y; }
+function parseYMD(d){ const p = d.split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+function sortKey(m){ return m.date+' '+(m.time||'99:99'); }
+
+/* ---------- Selector de hora ---------- */
+const TIME_CHIPS = ['08:00','09:00','10:00','11:00','12:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
+
+function timeChipsHTML(id){
+  return TIME_CHIPS.map(t=>`<button type="button" class="chip" onclick="setTimeValue('${id}','${t}')">${t}</button>`).join('');
+}
+function pad2(n){ return String(n).padStart(2,'0'); }
+function parseTimeOrDefault(value){
+  const m = /^(\d{1,2}):?(\d{0,2})$/.exec((value||'').trim());
+  if(!m) return {h:18, min:0};
+  let h = parseInt(m[1],10);
+  let min = m[2]!=='' ? parseInt(m[2],10) : 0;
+  if(isNaN(h)) h = 18;
+  if(isNaN(min)) min = 0;
+  h = Math.min(Math.max(h,0),23);
+  min = Math.min(Math.max(min,0),59);
+  return {h, min};
+}
+function setTimeValue(id, value){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.value = value;
+}
+function stepTime(id, deltaMinutes){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const {h, min} = parseTimeOrDefault(el.value);
+  let total = h*60 + min + deltaMinutes;
+  total = ((total % 1440) + 1440) % 1440;
+  const nh = Math.floor(total/60), nm = total%60;
+  el.value = pad2(nh)+':'+pad2(nm);
+}
+
+function resultText(m){
+  if(m.resultType==='wo_favor') return "WO a mi favor";
+  if(m.resultType==='wo_contra') return "WO en mi contra";
+  const sets = (m.sets||[]).filter(s=>s[0]!=="" && s[1]!=="");
+  if(!sets.length) return "sin registrar";
+  return sets.map(s=>s[0]+"-"+s[1]).join(", ");
+}
+function calcWinner(m){
+  if(m.resultType==='wo_favor') return 'me';
+  if(m.resultType==='wo_contra') return 'opp';
+  let meSets=0, oppSets=0;
+  m.sets.forEach(s=>{ if(s[0]!=="" && s[1]!==""){ const a=Number(s[0]), b=Number(s[1]); if(a>b) meSets++; else if(b>a) oppSets++; } });
+  if(meSets===0 && oppSets===0) return "";
+  return meSets>oppSets ? 'me' : 'opp';
+}
+/* Mensaje de resultado: NO incluye nunca la nota privada */
+function matchMessage(m){
+  const f = FIXTURE[m.n-1];
+  const ganador = m.winner==='me' ? "Marcello Gambardella" : m.opp;
+  return "Resultado 37º Beniopen — Segunda B\n"
+    +"Jornada "+m.n+" ("+f.periodo+")\n"
+    +"Marcello Gambardella vs "+m.opp+"\n"
+    +"Resultado: "+resultText(m)+"\n"
+    +"*Ganador: "+ganador+"*\n"
+    +"Fecha: "+fmtDate(m.date)+(m.time?" · "+m.time+"h":"")+"\n"
+    +"Pista: "+(m.campo||"—");
+}
+
+/* ---------- INICIO ---------- */
+function rowPlayed(m){
+  const st = matchState(m);
+  return `<div class="row" role="button" tabindex="0" onclick="openResultModal(${m.n})">
+    <div class="jchip ${st}">J${m.n}</div>
+    <div class="row-body">
+      <div class="opp-name">${escapeHtml(m.opp)}${rankChip(m.opp)}</div>
+      <div class="row-sub">${escapeHtml(resultText(m))}${m.date?' · '+fmtDate(m.date):''}</div>
+    </div>
+    <span class="pill ${st}${m.resultType!=='normal'?' wo':''}">${st==='win'?'Ganada':'Perdida'}</span>
+  </div>`;
+}
+function rowSched(m){
+  const d = parseYMD(m.date);
+  return `<div class="row" role="button" tabindex="0" onclick="openProgramaModal(${m.n})">
+    <div class="dateblk sched"><b>${d.getDate()}</b><span>${DIAS[d.getDay()]}</span></div>
+    <div class="row-body">
+      <div class="opp-name">${escapeHtml(m.opp)}<small>J${m.n}</small>${rankChip(m.opp)}</div>
+      <div class="row-sub">🕒 ${m.time?escapeHtml(m.time)+'h':'hora por confirmar'}<br>📍 ${m.campo?escapeHtml(m.campo):'pista por confirmar'}</div>
+    </div>
+  </div>`;
+}
+
+function renderInicio(){
+  const all = FIXTURE.map(f=>peekMatch(f.n));
+  let points=0, wins=0;
+  const playedList = all.filter(m=>m.played);
+  playedList.forEach(m=>{ if(m.winner==='me'){ points+=3; wins++; } else if(m.winner==='opp'){ points+=1; } });
+  document.getElementById('st-points').textContent = points;
+  document.getElementById('st-played').textContent = playedList.length+"/11";
+  document.getElementById('st-wins').textContent = wins;
+
+  const next = all.find(m=>!m.played);
+  const wrap = document.getElementById('next-wrap');
+  if(!next){
+    wrap.innerHTML = '<div class="card empty">¡Liguilla completada! 🎾</div>';
+  } else {
+    const f = FIXTURE[next.n-1];
+    const p = PLAYERS[next.opp] || {phone:'', email:''};
+    const when = next.date
+      ? `<div class="when">📅 ${fmtDate(next.date)}${next.time?' · '+escapeHtml(next.time)+'h':''}${next.campo?'<br>📍 '+escapeHtml(next.campo):''}</div>`
+      : `<div class="when">Aún sin fecha</div>`;
+    const waBtn = p.phone
+      ? `<a class="btn wa small span2" href="${waLink(p.phone, inviteText(f))}" target="_blank" rel="noopener">📱 Escribir por WhatsApp</a>`
+      : '';
+    wrap.innerHTML = `
+      <div class="card next-card">
+        <span class="pill jor">Próxima · Jornada ${next.n} · ${f.periodo}</span>
+        <div class="opp">vs ${escapeHtml(next.opp)}</div>
+        ${rankLine(next.opp)}
+        ${when}
+        <div class="row-actions">
+          ${waBtn}
+          <button class="btn cal small" onclick="openProgramaModal(${next.n})">📅 Programar</button>
+          <button class="btn court small" onclick="openResultModal(${next.n})">🏆 Resultado</button>
+        </div>
+      </div>`;
+  }
+
+  const playedEl = document.getElementById('home-played');
+  playedEl.innerHTML = `<h3>Partidos jugados <span class="count">(${playedList.length})</span></h3>` +
+    (playedList.length ? playedList.map(rowPlayed).join('') : '<div class="empty" style="padding:14px 0 6px;">Todavía no has jugado ningún partido.</div>');
+
+  const schedList = all.filter(m=>!m.played && m.date).sort((a,b)=>sortKey(a).localeCompare(sortKey(b)));
+  const schedEl = document.getElementById('home-sched');
+  schedEl.innerHTML = `<h3>Partidos programados <span class="count">(${schedList.length})</span></h3>` +
+    (schedList.length ? schedList.map(rowSched).join('') : '<div class="empty" style="padding:14px 0 6px;">No hay partidos con fecha. Programa uno desde "Partidas".</div>');
+}
+function inviteText(f){
+  return "Hola "+f.opp+"! Soy Marcello Gambardella, tu rival de la jornada "+f.n+" del 37º Beniopen (Segunda B, periodo "+f.periodo+"). ¿Cuándo te viene bien jugar? ¡Un saludo!";
+}
+
+/* ---------- CLASIFICACIÓN EN TIEMPO REAL (VERSIÓN AGGIORNATA) ---------- */
+
+/* Asigna cada columna por el texto de la cabecera; si no se reconoce, usa posiciones por defecto */
+function mapClasColumns(headers){
+  const find = re => headers.findIndex(h => re.test(h));
+  const idx = {
+    pos:    find(/^(#|pos\.?|posici[oó]n|rank|puesto|n[ºo°]\.?)$/),
+    name:   find(/jugador|player|nombre|equipo|team|participante/),
+    points: find(/pts|puntos|points/),
+    wins:   find(/^(pg|g|w|gan\w*|victor\w*|won)\.?$/),
+    losses: find(/^(pp|l|per\w*|derrot\w*|lost)\.?$/),
+    played: find(/^(pj|j|pld|p|played|jugad\w*|partidos)\.?$/)
+  };
+  return idx;
+}
+
+function parseClasificacionHtml(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const clean = el => (el ? el.textContent : '').replace(/\s+/g,' ').trim();
+  let best = [];
+
+  doc.querySelectorAll('table').forEach(table=>{
+    const trs = Array.from(table.querySelectorAll('tr'));
+    if(!trs.length) return;
+
+    const headRow = table.querySelector('thead tr') ||
+                    trs.find(tr => tr.querySelector('th') && !tr.querySelector('td'));
+    const headers = headRow ? Array.from(headRow.children).map(c => clean(c).toLowerCase()) : [];
+    const idx = mapClasColumns(headers);
+
+    const out = [];
+    trs.forEach(tr=>{
+      if(tr === headRow || tr.closest('thead')) return;
+      const cells = Array.from(tr.children).filter(c => /^t[dh]$/i.test(c.tagName)).map(clean);
+      if(cells.length < 3 || !cells.some(Boolean)) return;
+
+      const get = (i, fallback) => {
+        const k = i >= 0 ? i : fallback;
+        return (k >= 0 && k < cells.length) ? cells[k] : '';
+      };
+      const name = get(idx.name, 1);
+      if(!name) return;
+
+      out.push({
+        pos:    get(idx.pos, 0) || String(out.length + 1),
+        name:   name,
+        played: get(idx.played, 2),
+        wins:   get(idx.wins, 3),
+        losses: get(idx.losses, 4),
+        points: get(idx.points, cells.length - 1)
+      });
+    });
+
+    if(out.length > best.length) best = out;
+  });
+  return best;
+}
+
+/* Descarga con tiempo límite */
+function fetchWithTimeout(url, ms){
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), ms || 9000);
+  return fetch(url, {signal: ctrl.signal}).finally(()=>clearTimeout(t));
+}
+
+/* Llama a una función de Apps Script con tiempo límite (nunca se queda colgado) */
+function gasCall(fn, args, ms){
+  return new Promise((resolve, reject)=>{
+    if(!isGasEnv()) return reject(new Error('Sin Apps Script'));
+    let done = false;
+    const timer = setTimeout(()=>{ if(!done){ done = true; reject(new Error('El servidor tardó demasiado')); } }, ms || 25000);
+    const finish = (ok, v) => { if(done) return; done = true; clearTimeout(timer); ok ? resolve(v) : reject(v); };
+    google.script.run
+      .withSuccessHandler(res => (res && res.success) ? finish(true, res) : finish(false, new Error((res && res.error) || 'Error del servidor')))
+      .withFailureHandler(err => finish(false, new Error((err && err.message) || String(err))))
+      [fn].apply(null, args || []);
+  });
+}
+
+/* Proxies CORS de reserva, probados uno tras otro */
+const PROXIES = [
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
+  u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u)
+];
+function proxyAttempts(target){
+  return PROXIES.map(build => () => fetchWithTimeout(build(target), 9000).then(r=>{
+    if(!r.ok) throw new Error('Proxy ' + r.status);
+    return r.text();
+  }));
+}
+
+/* Prueba cada intento en orden y devuelve el primero que sea válido */
+async function firstValid(attempts, validate){
+  let lastErr = null;
+  for(const attempt of attempts){
+    try{
+      const r = await attempt();
+      if(validate(r)) return r;
+      lastErr = new Error('Respuesta vacía');
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('No se pudo cargar.');
+}
+
+/* Devuelve {html, stale, cachedAt}: 1) Apps Script (con reintentos y caché), 2) proxies */
+function getClasificacionHtml(slug, force){
+  const target = 'https://www.beniopen.es/table/' + slug + '/';
+  const viaGas = () => gasCall('leggiClasificacionBeniopen', [slug, !!force], 30000);
+  const viaProxies = proxyAttempts(target).map(p => () => p().then(html => ({html: html})));
+  return firstValid([viaGas].concat(viaProxies), r => r && r.html && parseClasificacionHtml(r.html).length);
+}
+
+/* silent=true: refresco automático sin parpadeo (mantiene la tabla visible) */
+let clasReq = 0;
+function fetchLiveClasificacion(forceRefresh, silent){
+  const slug = currentClasSlug;
+  const reqId = ++clasReq;
+  const container = document.getElementById('clas-container');
+  const prev = cachedClasificacion[slug];
+  const hasData = prev && prev.rows && prev.rows.length;
+  if(container && !(silent && hasData)){
+    if(hasData) renderLiveClasificacionTable();  // muestra lo guardado mientras actualiza
+    else container.innerHTML = '<div class="empty">⏳ Cargando clasificación…</div>';
+  }
+
+  getClasificacionHtml(slug, !!forceRefresh)
+    .then(res=>{
+      const stale = !!res.stale;
+      cachedClasificacion[slug] = {
+        success: true,
+        rows: parseClasificacionHtml(res.html),
+        timestamp: new Date(res.cachedAt || Date.now()).toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
+        stale: stale,
+        _fetchedAt: stale ? (res.cachedAt || Date.now()) : Date.now()
+      };
+      persistLiveCache();
+      if(slug === currentClasSlug && document.getElementById('clas-container')) renderLiveClasificacionTable();
+    })
+    .catch(err=>{
+      console.warn('Clasificación:', err);
+      if(slug !== currentClasSlug) return;
+      if(hasData){                                   // fallo: conserva y avisa
+        prev.stale = true;
+        if(!silent) renderLiveClasificacionTable();
+        return;
+      }
+      showClasError(err && err.message ? err.message : String(err));
+    });
+}
+
+/* Refresco automático cada 60 s mientras el modal de clasificación está abierto */
+let clasTimer = null;
+function startClasAutoRefresh(){
+  stopClasAutoRefresh();
+  clasTimer = setInterval(()=>{
+    if(document.hidden) return;
+    if(!document.getElementById('clas-container')){ stopClasAutoRefresh(); return; }
+    fetchLiveClasificacion(true, true);
+  }, 60000);
+}
+function stopClasAutoRefresh(){
+  if(clasTimer){ clearInterval(clasTimer); clasTimer = null; }
+}
+
+function openLiveClasificacionModal(defaultSlug){
+  if(defaultSlug) currentClasSlug = defaultSlug;
+  document.getElementById('modal-title').textContent = "📊 Clasificación en tiempo real";
+
+  const groups = [
+    {slug:'segunda-b', name:'🎾 Segunda B (Tu grupo)'},
+    {slug:'segunda-a', name:'Segunda A'},
+    {slug:'segunda-c', name:'Segunda C'},
+    {slug:'segunda-d', name:'Segunda D'},
+    {slug:'segunda-e', name:'Segunda E'},
+    {slug:'segunda-f', name:'Segunda F'}
+  ];
+
+  const chipsHtml = groups.map(g =>
+    `<button type="button" class="group-chip ${currentClasSlug===g.slug?'active':''}" onclick="selectClasificionGroup('${g.slug}')">${g.name}</button>`
+  ).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    <p class="hint">Tabla de clasificación oficial de beniopen.es. Se actualiza en directo sin salir de la app.</p>
+    <div class="group-chips" id="clas-group-chips">${chipsHtml}</div>
+    <div id="clas-container" style="min-height:180px; max-height:55vh; overflow-y:auto;">
+      <div class="empty">⏳ Cargando clasificación en vivo...</div>
+    </div>
+    <div class="form-actions" style="margin-top:14px;">
+      <button class="btn primary" onclick="fetchLiveClasificacion(true)">🔄 Actualizar tabla</button>
+      <a class="btn court" id="clas-web-link" href="https://www.beniopen.es/table/${currentClasSlug}/" target="_blank" rel="noopener">🌐 Abrir en beniopen.es</a>
+      <button class="btn ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  `;
+
+  document.getElementById('modal-bg').classList.add('open');
+  startClasAutoRefresh();
+
+  const cached = cachedClasificacion[currentClasSlug];
+  if(cached && (Date.now() - cached._fetchedAt < 120000)){
+    renderLiveClasificacionTable();
+  } else {
+    fetchLiveClasificacion();
+  }
+}
+
+function selectClasificionGroup(slug){
+  currentClasSlug = slug;
+  document.querySelectorAll('#clas-group-chips .group-chip').forEach(btn => {
+    const isTarget = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("'"+slug+"'");
+    btn.classList.toggle('active', isTarget);
+  });
+  const linkBtn = document.getElementById('clas-web-link');
+  if(linkBtn) linkBtn.href = 'https://www.beniopen.es/table/' + slug + '/';
+
+  const cached = cachedClasificacion[currentClasSlug];
+  if(cached && (Date.now() - cached._fetchedAt < 120000)){
+    renderLiveClasificacionTable();
+  } else {
+    fetchLiveClasificacion();
+  }
+}
+
+function showClasError(errMsg){
+  const container = document.getElementById('clas-container');
+  if(!container) return;
+  let text = escapeHtml(errMsg);
+  if(text.includes('script.external_request')){
+    text = '⚠️ Para cargar desde el servidor se requiere permiso de red. Abre el enlace directo abajo:';
+  }
+  container.innerHTML = `
+    <div style="text-align:center; padding:16px 10px; color:var(--muted);">
+      <p style="margin-bottom:12px; line-height:1.4;">${text}</p>
+      <a class="btn court small" href="https://www.beniopen.es/table/${currentClasSlug}/" target="_blank" rel="noopener" style="display:inline-flex;">🌐 Ver tabla en beniopen.es</a>
+    </div>`;
+}
+
+function renderLiveClasificacionTable(){
+  const container = document.getElementById('clas-container');
+  if(!container) return;
+  const data = cachedClasificacion[currentClasSlug];
+  if(!data || !data.rows || !data.rows.length){
+    container.innerHTML = '<div class="empty">No hay datos disponibles para este grupo.</div>';
+    return;
+  }
+
+  let html = `<div style="font-size:12px; color:var(--muted); margin-bottom:8px; text-align:right;">Última actualización: ${data.timestamp || 'reciente'}${staleNote(data)}</div>`;
+  html += `<table class="clas-table">
+    <thead>
+      <tr>
+        <th style="width:10%;">Pos</th>
+        <th style="text-align:left;">Jugador</th>
+        <th style="width:12%;">PJ</th>
+        <th style="width:12%;">PG</th>
+        <th style="width:12%;">PP</th>
+        <th style="width:14%;">Pts</th>
+      </tr>
+    </thead>
+    <tbody>`;
+
+  data.rows.forEach(r => {
+    const isUser = /gambardella|marcello/i.test(r.name);
+    html += `
+      <tr class="${isUser?'highlight':''}">
+        <td><b>${escapeHtml(r.pos)}º</b></td>
+        <td style="text-align:left;">${escapeHtml(r.name)}${isUser?' ⭐️':''}</td>
+        <td>${escapeHtml(r.played)}</td>
+        <td><span style="color:var(--win); font-weight:700;">${escapeHtml(r.wins)}</span></td>
+        <td><span style="color:var(--loss); font-weight:700;">${escapeHtml(r.losses)}</span></td>
+        <td><b style="color:var(--court); font-size:15px;">${escapeHtml(r.points)}</b></td>
+      </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
+/* ---------- RESULTADOS EN TIEMPO REAL (FILTRADOS POR GIRONE) ---------- */
+function openLiveResultsModal(defaultGroup){
+  if(defaultGroup) currentLiveGroup = defaultGroup;
+  document.getElementById('modal-title').textContent = "🏁 Resultados en tiempo real";
+  
+  const groups = [
+    {id:'B', name:'🎾 Segunda B (Tu grupo)'},
+    {id:'ALL', name:'Todos'},
+    {id:'A', name:'Segunda A'},
+    {id:'C', name:'Segunda C'},
+    {id:'D', name:'Segunda D'},
+    {id:'E', name:'Segunda E'},
+    {id:'F', name:'Segunda F'}
+  ];
+
+  const chipsHtml = groups.map(g => 
+    `<button type="button" class="group-chip ${currentLiveGroup===g.id?'active':''}" onclick="selectLiveGroup('${g.id}')">${g.name}</button>`
+  ).join('');
+
+  document.getElementById('modal-body').innerHTML = `
+    <p class="hint">Resultados oficiales actualizados desde beniopen.es. Filtra fácilmente por tu girone o consulta las demás categorías de Segunda.</p>
+    <div class="group-chips" id="live-group-chips">${chipsHtml}</div>
+    <input type="text" id="live-search" placeholder="🔍 Buscar por nombre de jugador..." oninput="renderLiveResultsList()" style="margin-bottom:12px;">
+    <div id="live-results-container" style="min-height:160px; max-height:50vh; overflow-y:auto; padding-right:4px;">
+      <div class="empty">⏳ Cargando resultados en vivo...</div>
+    </div>
+    <div class="form-actions" style="margin-top:14px;">
+      <button class="btn primary" onclick="fetchLiveResults(true)">🔄 Actualizar datos</button>
+      <a class="btn court" href="https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/" target="_blank" rel="noopener">🌐 Abrir en beniopen.es</a>
+      <button class="btn ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  `;
+
+  document.getElementById('modal-bg').classList.add('open');
+
+  if(cachedLiveResults && (Date.now() - cachedLiveResults._fetchedAt < 120000)){
+    renderLiveResultsList();
+  } else {
+    fetchLiveResults();
+  }
+}
+
+function selectLiveGroup(grp){
+  currentLiveGroup = grp;
+  document.querySelectorAll('#live-group-chips .group-chip').forEach(btn => {
+    const isTarget = btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("'"+grp+"'");
+    btn.classList.toggle('active', isTarget);
+  });
+  renderLiveResultsList();
+}
+
+function parseResultsHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const matches = [], seen = {};
+  doc.querySelectorAll('li').forEach(li => {
+    const text = li.textContent.replace(/\s+/g, ' ').trim();
+    if (!text || text.length < 6 || seen[text]) return;
+    const gm = text.match(/\(([A-F])\)\s*$/i);
+    if (!gm && !/\d/.test(text)) return;   // descarta items de menú
+    seen[text] = 1;
+    matches.push({ raw: text, group: gm ? gm[1].toUpperCase() : 'GENERAL' });
+  });
+  return matches;
+}
+
+let liveReq = 0;
+function fetchLiveResults(forceRefresh){
+  const reqId = ++liveReq;
+  const container = document.getElementById('live-results-container');
+  const prev = cachedLiveResults;
+  const hasData = prev && prev.matches && prev.matches.length;
+  if(container){
+    if(hasData) renderLiveResultsList();
+    else container.innerHTML = '<div class="empty">⏳ Conectando con beniopen.es...</div>';
+  }
+
+  const target = 'https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/';
+  const viaGas = () => gasCall('leggiRisultatiBeniopen', [!!forceRefresh], 30000);
+  const viaProxies = proxyAttempts(target).map(p => () => p().then(html => {
+    const matches = parseResultsHtml(html);
+    return {matches: matches, timestamp: new Date().toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})};
+  }));
+
+  firstValid([viaGas].concat(viaProxies), r => r && r.matches && r.matches.length)
+    .then(res => {
+      if(reqId !== liveReq) return;
+      const stale = !!res.stale;
+      cachedLiveResults = {
+        success: true,
+        matches: res.matches,
+        timestamp: res.timestamp,
+        stale: stale,
+        _fetchedAt: stale ? (res.cachedAt || Date.now()) : Date.now()
+      };
+      persistLiveCache();
+      renderLiveResultsList();
+    })
+    .catch(err => {
+      if(reqId !== liveReq) return;
+      console.warn('Resultados:', err);
+      if(hasData){ prev.stale = true; renderLiveResultsList(); return; }
+      showLiveError(err && err.message ? err.message : String(err));
+    });
+}
+
+function showLiveError(errMsg){
+  const container = document.getElementById('live-results-container');
+  if(!container) return;
+  let text = escapeHtml(errMsg);
+  if(text.includes('script.external_request')){
+    text = '⚠️ Para cargar desde el servidor de Google se requiere autorización (script.external_request). Mientras tanto, puedes consultar la web directamente:';
+  }
+  container.innerHTML = `
+    <div style="text-align:center; padding:16px 10px; color:var(--muted);">
+      <p style="margin-bottom:12px; line-height:1.4;">${text}</p>
+      <a class="btn court small" href="https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/" target="_blank" rel="noopener" style="display:inline-flex;">🌐 Abrir beniopen.es en ventana nueva</a>
+    </div>`;
+}
+
+function renderLiveResultsList(){
+  const container = document.getElementById('live-results-container');
+  if(!container) return;
+  if(!cachedLiveResults || !cachedLiveResults.matches){
+    container.innerHTML = '<div class="empty">No hay datos disponibles.</div>';
+    return;
+  }
+
+  const query = (document.getElementById('live-search') ? document.getElementById('live-search').value : '').toLowerCase().trim();
+
+  let filtered = cachedLiveResults.matches;
+  if(currentLiveGroup !== 'ALL'){
+    filtered = filtered.filter(m => m.group === currentLiveGroup);
+  }
+  if(query){
+    filtered = filtered.filter(m => m.raw.toLowerCase().includes(query));
+  }
+
+  if(!filtered.length){
+    container.innerHTML = `<div class="empty" style="padding:24px 10px;">No se encontraron resultados para el girone <b>${currentLiveGroup==='ALL'?'Todas':currentLiveGroup}</b>.</div>`;
+    return;
+  }
+
+  let html = `<div style="font-size:12px; color:var(--muted); margin-bottom:8px; text-align:right;">Última actualización: ${cachedLiveResults.timestamp || 'reciente'}${staleNote(cachedLiveResults)}</div>`;
+  html += filtered.map(m => `
+    <div class="res-live-card">
+      <div class="res-live-text">🎾 ${escapeHtml(m.raw)}</div>
+      <div class="res-group-badge">Girone ${escapeHtml(m.group)}</div>
+    </div>
+  `).join('');
+
+  container.innerHTML = html;
+}
+
+/* ---------- CALENDARIO ---------- */
+function calCard(m){
+  const st = matchState(m);
+  const d = parseYMD(m.date);
+  const hora = m.time ? escapeHtml(m.time)+'h' : 'Hora por confirmar';
+  const lugar = m.campo ? escapeHtml(m.campo) : 'Pista por confirmar';
+  const res = m.played
+    ? `<div class="cal-res ${st}">${st==='win'?'Ganada':'Perdida'} · ${escapeHtml(resultText(m))}</div>`
+    : `<div class="cal-res sched">Programada</div>`;
+  return `<div class="cal-card">
+    <div class="dateblk ${st==='todo'?'sched':st}"><b>${d.getDate()}</b><span>${DIAS[d.getDay()]}</span></div>
+    <div class="cal-body">
+      <div class="opp-name">${escapeHtml(m.opp)}<small>J${m.n}</small>${rankChip(m.opp)}</div>
+      <div class="cal-meta">🕒 ${hora}</div>
+      <div class="cal-meta">📍 ${lugar}</div>
+      ${res}
+      <div class="row-actions">
+        <button class="btn cal small" onclick="openProgramaModal(${m.n})">📅 Editar</button>
+        <button class="btn court small" onclick="openResultModal(${m.n})">🏆 ${m.played?'Resultado':'Anotar'}</button>
+        ${m.campo?`<a class="btn ghost small span2" href="${mapsSearchLink(m.campoAddress||m.campo)}" target="_blank" rel="noopener">🗺️ Ver en Maps</a>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+function undatedCard(m){
+  const f = FIXTURE[m.n-1];
+  const st = matchState(m);
+  const info = m.played
+    ? `<span class="pill ${st}">${st==='win'?'Ganada':'Perdida'}</span> <span class="row-sub">${escapeHtml(resultText(m))}</span>`
+    : `<span class="pill todo">Sin fecha</span>`;
+  return `<div class="cal-card">
+    <div class="jchip ${st==='todo'?'':st}" style="${st==='todo'?'background:var(--todo-bg);color:var(--todo);':''}align-self:flex-start;">J${m.n}</div>
+    <div class="cal-body">
+      <div class="opp-name">${escapeHtml(m.opp)}${rankChip(m.opp)}</div>
+      <div class="cal-meta">Periodo: ${f.periodo}</div>
+      <div style="margin-top:6px;">${info}</div>
+      <div class="row-actions">
+        <button class="btn cal small" onclick="openProgramaModal(${m.n})">📅 Programar</button>
+        <button class="btn court small" onclick="openResultModal(${m.n})">🏆 ${m.played?'Resultado':'Anotar'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderCalendario(){
+  const el = document.getElementById('cal-list');
+  if(!el) return;
+  const all = FIXTURE.map(f=>peekMatch(f.n));
+  const dated = all.filter(m=>m.date).sort((a,b)=>sortKey(a).localeCompare(sortKey(b)));
+  const undated = all.filter(m=>!m.date);
+  let html = '', lastKey = '';
+  dated.forEach(m=>{
+    const key = m.date.slice(0,7);
+    if(key !== lastKey){
+      lastKey = key;
+      const parts = key.split('-');
+      html += `<h3 class="month">${MESES[Number(parts[1])-1]} ${parts[0]}</h3>`;
+    }
+    html += calCard(m);
+  });
+  if(!dated.length){
+    html += '<div class="card empty">Todavía no hay partidos con fecha.<br>Programa uno desde "Partidas".</div>';
+  }
+  if(undated.length){
+    html += '<h3 class="month">Sin fecha</h3>' + undated.map(undatedCard).join('');
+  }
+  el.innerHTML = html;
+}
+
+/* ---------- PARTIDAS ---------- */
+function matchCard(f){
+  const m = peekMatch(f.n);
+  const st = matchState(m);
+  let pill;
+  if(m.played) pill = `<span class="pill ${st}${m.resultType!=='normal'?' wo':''}">${m.winner==='me'?'Ganada':'Perdida'}</span>`;
+  else if(m.date) pill = `<span class="pill sched">Programada</span>`;
+  else pill = `<span class="pill todo">Sin fecha</span>`;
+  const when = m.date ? fmtDate(m.date)+(m.time?' · '+escapeHtml(m.time)+'h':'') : 'Sin fecha';
+  const priv = getPrivNote(m.opp);
+
+  return `<div class="match">
+    <div class="head"><b>J${f.n} · ${escapeHtml(f.opp)}${rankOf(f.opp)?' · 🏅 nº'+rankOf(f.opp):''}</b>${pill}</div>
+    <div class="meta">${f.periodo}<br>📅 ${when}${m.campo?'<br>📍 '+escapeHtml(m.campo):''}${m.eventId?'<br>🔗 En Calendar'+(m.eventInvited?' (invitado)':''):''}</div>
+    ${m.played? `<div class="score">${escapeHtml(resultText(m))} — ${m.winner==='me'?'Gané yo':'Ganó '+escapeHtml(m.opp)}</div>`:''}
+    ${m.notes? `<div class="note-line">📝 ${escapeHtml(m.notes)}</div>` : ''}
+    ${priv? `<div class="priv-note"><b>🔒 Nota privada (solo tú)</b><p>${escapeHtml(priv)}</p></div>` : ''}
+    <div class="row-actions">
+      <button class="btn cal small" onclick="openProgramaModal(${f.n})">📅 Programar</button>
+      <button class="btn court small" onclick="openResultModal(${f.n})">🏆 ${m.played?'Editar resultado':'Resultado'}</button>
+      <button class="btn ghost small" onclick="openPrivNoteModal(${f.n})">🔒 ${priv?'Editar nota privada':'Nota privada'}</button>
+      ${m.campo? `<a class="btn ghost small" href="${mapsSearchLink(m.campoAddress||m.campo)}" target="_blank" rel="noopener">🗺️ Maps</a>` : ''}
+      ${m.played? `<button class="btn wa small" onclick="sendWA(${f.n},'opp')">📱 Rival</button>
+                   <button class="btn wa small" onclick="sendWA(${f.n},'org')">📱 Organización</button>
+                   <button class="btn mail small" onclick="sendMail(${f.n})">✉️ Email</button>
+                   <button class="btn ghost small" onclick="copyMatch(${f.n}, this)">📋 Copiar</button>` : ''}
+    </div>
+  </div>`;
+}
+function renderPartidas(){
+  const el = document.getElementById('matches-list');
+  if(!el) return;
+  el.innerHTML = FIXTURE.map(matchCard).join('');
+}
+
+/* ---------- Nota privada por rival ---------- */
+function openPrivNoteModal(n){
+  const f = FIXTURE[n-1];
+  const note = getPrivNote(f.opp);
+  document.getElementById('modal-title').textContent = "🔒 Nota privada · " + f.opp;
+  document.getElementById('modal-body').innerHTML = `
+    <p class="hint">Solo la ves tú en esta app. No se incluye nunca en los mensajes de WhatsApp o email, ni en el evento de Google Calendar.</p>
+    <label>Tu nota sobre ${escapeHtml(f.opp)}</label>
+    <textarea id="m-privnote" rows="5" placeholder="Ej: Revés flojo, sube mucho a la red, prefiere tierra batida...">${escapeHtml(note)}</textarea>
+    <div class="form-actions">
+      <button class="btn primary" onclick="savePrivNote(${n})">💾 Guardar nota</button>
+      ${note?`<button class="btn ghost danger" onclick="deletePrivNote(${n})">🗑️ Borrar nota</button>`:''}
+      <button class="btn ghost" onclick="closeModal()">Cerrar</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function savePrivNote(n){
+  const f = FIXTURE[n-1];
+  const txt = document.getElementById('m-privnote').value.trim();
+  if(!store.privNotes) store.privNotes = {};
+  if(txt) store.privNotes[f.opp] = txt;
+  else delete store.privNotes[f.opp];
+  save();
+  closeModal();
+  refreshAll();
+}
+function deletePrivNote(n){
+  const f = FIXTURE[n-1];
+  if(!confirm('¿Borrar la nota privada sobre '+f.opp+'?')) return;
+  if(store.privNotes) delete store.privNotes[f.opp];
+  save();
+  closeModal();
+  refreshAll();
+}
+/* MODAL: Programar Partida */
+function openProgramaModal(n){
+  const m = getMatch(n);
+  const f = FIXTURE[n-1];
+
+  const calLabel = m.eventId ? '🔄 Actualizar en Calendar' : '📅 Guardar + Calendar';
+  const calInviteLabel = m.eventId ? '🔄📤 Actualizar + invitar' : '📤 Guardar + Calendar + invitar';
+  const linkNote = m.eventId
+    ? `<div class="hint">🔗 Este partido está vinculado a un evento de Google Calendar${m.eventInvited?` (con ${escapeHtml(f.opp)} invitado)`:''}. Al guardar aquí se actualiza también el evento.</div>`
+    : '';
+  const removeBtn = m.eventId
+    ? `<button class="btn ghost small danger btn-cal-action" onclick="cancelarCita(${n})">🗑️ Cancelar cita (borra también de Calendar)</button>`
+    : '';
+
+  document.getElementById('modal-title').textContent = "📅 Programar J" + n + " · vs " + f.opp;
+  document.getElementById('modal-body').innerHTML = `
+    <label>Fecha del partido</label>
+    <input type="date" id="m-date" value="${m.date}">
+
+    <label>Hora</label>
+    <div class="time-picker">
+      <button type="button" class="time-step" onclick="stepTime('m-time',-15)" aria-label="Menos 15 minutos">−</button>
+      <input type="time" class="time-input" id="m-time" value="${m.time||'18:00'}" step="300">
+      <button type="button" class="time-step" onclick="stepTime('m-time',15)" aria-label="Más 15 minutos">+</button>
+    </div>
+    <div class="time-chips">${timeChipsHTML('m-time')}</div>
+
+    <label>Pista / club</label>
+    <div class="campo-field">
+      <select id="m-campo" class="campo-select" onchange="handleCampoChange('m-campo')">${courtsOptionsHTML(m.campo||store.cache.campo||'')}</select>
+      <button type="button" class="btn ghost small" onclick="closeModal(); showView('pista')">⚙️ Pistas</button>
+    </div>
+    <div id="m-campo-custom-wrap" class="custom-court-box" style="display:none;">
+      <input type="text" id="m-campo-newname" placeholder="Nombre de la pista">
+      <input type="text" id="m-campo-newaddr" placeholder="Dirección / referencia de Google Maps (opcional)">
+      <button type="button" class="btn primary small" onclick="addCourtInline('m-campo')" style="width:100%;">➕ Añadir y usar esta pista</button>
+    </div>
+
+    <label>Notas del partido (se incluyen en el evento de Calendar)</label>
+    <textarea id="m-notes" rows="2" placeholder="Ej: Pista reservada, llevar bolas...">${escapeHtml(m.notes||'')}</textarea>
+    <p class="hint">Para apuntes solo tuyos usa "🔒 Nota privada" en la pestaña Partidas.</p>
+
+    ${linkNote}
+    <div id="cal-status" class="hint" style="margin-top:6px;"></div>
+
+    <div class="form-actions">
+      <button class="btn primary btn-cal-action" onclick="saveProgramazione(${n})">💾 Solo guardar</button>
+      <button class="btn cal btn-cal-action" onclick="guardarYCalendario(${n}, false)">${calLabel}</button>
+      <button class="btn court btn-cal-action" onclick="guardarYCalendario(${n}, true)">${calInviteLabel}</button>
+      ${removeBtn}
+      <button class="btn ghost" onclick="closeModal()">Cerrar</button>
+    </div>
+  `;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+/* ---------- Pistas ---------- */
+function courtsOptionsHTML(selectedValue){
+  let html = '<option value="">— Selecciona una pista —</option>';
+  let matched = false;
+  store.courts.forEach(c=>{
+    const sel = c.name === selectedValue ? ' selected' : '';
+    if(sel) matched = true;
+    html += `<option value="${escapeHtml(c.name)}"${sel}>${escapeHtml(c.name)}</option>`;
+  });
+  if(selectedValue && !matched){
+    html += `<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(selectedValue)} (personalizada)</option>`;
+  }
+  html += `<option value="__custom__">➕ Otra pista (escribir)…</option>`;
+  return html;
+}
+
+function handleCampoChange(selectId){
+  const sel = document.getElementById(selectId);
+  const wrap = document.getElementById(selectId+'-custom-wrap');
+  if(!sel || !wrap) return;
+  wrap.style.display = (sel.value === '__custom__') ? '' : 'none';
+}
+
+function addOrUpdateCourt(name, address){
+  const existing = store.courts.find(c=>c.name.toLowerCase()===name.toLowerCase());
+  if(existing){ existing.address = address; }
+  else { store.courts.push({id:'c_'+Date.now().toString(36), name, address}); }
+  save();
+}
+
+function refreshAllCourtSelects(selectedName){
+  document.querySelectorAll('select.campo-select').forEach(sel=>{
+    sel.innerHTML = courtsOptionsHTML(selectedName || '');
+    const wrap = document.getElementById(sel.id+'-custom-wrap');
+    if(wrap) wrap.style.display = 'none';
+  });
+}
+
+function addCourtInline(selectId){
+  const nameEl = document.getElementById(selectId+'-newname');
+  const addrEl = document.getElementById(selectId+'-newaddr');
+  const name = nameEl.value.trim();
+  if(!name){ alert('Escribe el nombre de la pista.'); return; }
+  const address = addrEl.value.trim() || name;
+  addOrUpdateCourt(name, address);
+  refreshAllCourtSelects(name);
+  nameEl.value=''; addrEl.value='';
+  showSyncIndicator('Pista añadida ✓');
+}
+
+function renderCourtsManager(){
+  const wrap = document.getElementById('courts-manager');
+  if(!wrap) return;
+  if(!store.courts.length){
+    wrap.innerHTML = '<p class="hint">Todavía no hay pistas guardadas.</p>';
+    return;
+  }
+  wrap.innerHTML = store.courts.map((c,i)=>`
+    <div class="court-row" data-idx="${i}">
+      <input type="text" class="court-name" value="${escapeHtml(c.name)}" placeholder="Nombre de la pista">
+      <input type="text" class="court-addr" value="${escapeHtml(c.address)}" placeholder="Dirección / referencia de Google Maps">
+      <div class="row-actions">
+        <a class="btn ghost small span2" href="${mapsSearchLink(c.address||c.name)}" target="_blank" rel="noopener">🗺️ Ver en Maps</a>
+        <button type="button" class="btn primary small" onclick="saveCourtRow(${i})">💾 Guardar</button>
+        <button type="button" class="btn ghost small danger" onclick="deleteCourtRow(${i})">🗑️ Borrar</button>
+      </div>
+    </div>`).join('');
+}
+
+function saveCourtRow(i){
+  const row = document.querySelectorAll('#courts-manager .court-row')[i];
+  if(!row) return;
+  const name = row.querySelector('.court-name').value.trim();
+  const address = row.querySelector('.court-addr').value.trim();
+  if(!name){ alert('El nombre no puede estar vacío.'); return; }
+  store.courts[i] = {...store.courts[i], name, address: address || name};
+  save();
+  renderCourtsManager();
+  refreshAllCourtSelects();
+  showSyncIndicator('Pista guardada ✓');
+}
+
+function deleteCourtRow(i){
+  if(!confirm('¿Eliminar esta pista de la lista? (Los partidos ya programados conservan el nombre guardado.)')) return;
+  store.courts.splice(i,1);
+  save();
+  renderCourtsManager();
+  refreshAllCourtSelects();
+}
+
+function addCourtFromManager(){
+  const nameEl = document.getElementById('new-court-name');
+  const addrEl = document.getElementById('new-court-addr');
+  const name = nameEl.value.trim();
+  if(!name){ alert('Escribe un nombre para la pista.'); return; }
+  const address = addrEl.value.trim() || name;
+  addOrUpdateCourt(name, address);
+  nameEl.value=''; addrEl.value='';
+  renderCourtsManager();
+  refreshAllCourtSelects();
+  showSyncIndicator('Pista añadida ✓');
+}
+
+function saveProgramazione(n, opts){
+  const m = getMatch(n);
+  m.date = document.getElementById('m-date').value;
+  m.time = document.getElementById('m-time').value;
+  const campoSel = document.getElementById('m-campo');
+  let campoName = campoSel.value;
+  if(campoName === '__custom__'){
+    const typed = document.getElementById('m-campo-newname');
+    campoName = typed ? typed.value.trim() : '';
+  }
+  m.campo = campoName;
+  const courtMatch = store.courts.find(c=>c.name===campoName);
+  m.campoAddress = courtMatch ? courtMatch.address : campoName;
+  m.notes = document.getElementById('m-notes').value.trim();
+  if(m.campo) store.cache.campo = m.campo;
+  save();
+  if(!opts || !opts.keepModalOpen){
+    closeModal();
+  }
+  refreshAll();
+}
+
+/* A Calendar solo se envían: rival, email, fecha, hora, pista y notas del partido. La nota privada NO. */
+function guardarYCalendario(n, invitar){
+  const date = document.getElementById('m-date').value;
+  if(!date){
+    alert("Selecciona una fecha antes de sincronizar con el calendario.");
+    return;
+  }
+
+  saveProgramazione(n, {keepModalOpen:true});
+
+  const m = getMatch(n);
+  const f = FIXTURE[n-1];
+  const p = PLAYERS[f.opp];
+  const statusDiv = document.getElementById('cal-status');
+  const btns = document.querySelectorAll('#modal-body .btn-cal-action');
+  btns.forEach(b=>b.disabled = true);
+  if(statusDiv) statusDiv.textContent = invitar
+    ? "Sincronizando evento e invitando a " + f.opp + "…"
+    : "Sincronizando evento con Google Calendar…";
+
+  if(!isGasEnv()){
+    if(statusDiv) statusDiv.textContent = "⚠️ Esta función solo funciona cuando la app está desplegada como Web App de Google Apps Script (aquí en vista previa no está disponible).";
+    btns.forEach(b=>b.disabled = false);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      btns.forEach(b=>b.disabled = false);
+      if(res && res.success){
+        m.eventId = res.eventId;
+        m.eventInvited = !!invitar;
+        save();
+        if(statusDiv) statusDiv.textContent = invitar
+          ? "✅ Evento sincronizado e invitación enviada a " + (p.email || f.opp) + "."
+          : "✅ Evento sincronizado con Google Calendar.";
+        refreshAll();
+        closeModal();
+      } else {
+        if(statusDiv) statusDiv.textContent = "❌ No se pudo sincronizar: " + (res && res.error ? res.error : "Error desconocido");
+      }
+    })
+    .withFailureHandler(function(err){
+      btns.forEach(b=>b.disabled = false);
+      if(statusDiv) statusDiv.textContent = "❌ Error del servidor: " + (err && err.message ? err.message : err);
+    })
+    .creaEventoCalendario({
+      n: n,
+      opp: f.opp,
+      email: p ? p.email : '',
+      date: m.date,
+      time: m.time,
+      campo: m.campoAddress || m.campo,
+      notes: m.notes,
+      invita: !!invitar,
+      eventId: m.eventId || ''
+    });
+}
+
+function cancelarCita(n){
+  const m = getMatch(n);
+  if(!confirm('¿Cancelar esta cita? '+(m.eventId? 'También se eliminará el evento de Google Calendar.' : ''))) return;
+
+  const finish = ()=>{
+    m.date = ""; m.time = ""; m.campo = ""; m.campoAddress = ""; m.notes = ""; m.eventId = ""; m.eventInvited = false;
+    save();
+    closeModal();
+    refreshAll();
+  };
+
+  if(m.eventId && isGasEnv()){
+    const statusDiv = document.getElementById('cal-status');
+    if(statusDiv) statusDiv.textContent = "Eliminando evento de Google Calendar…";
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(res && !res.success && statusDiv){ statusDiv.textContent = "⚠️ No se pudo borrar el evento (" + res.error + "), pero se cancela igualmente la cita en la app."; }
+        finish();
+      })
+      .withFailureHandler(function(err){
+        if(statusDiv) statusDiv.textContent = "⚠️ No se pudo borrar el evento del calendario, pero se cancela igualmente la cita en la app.";
+        finish();
+      })
+      .eliminaEventoCalendario(m.eventId);
+  } else {
+    finish();
+  }
+}
+
+/* MODAL: Registrar / Editar Resultado */
+function openResultModal(n){
+  const m = getMatch(n);
+  const f = FIXTURE[n-1];
+
+  document.getElementById('modal-title').textContent = "🏆 Resultado J" + n + " · vs " + f.opp;
+  document.getElementById('modal-body').innerHTML = `
+    <label>Tipo de resultado</label>
+    <select id="m-type">
+      <option value="normal" ${m.resultType==='normal'?'selected':''}>Partido jugado</option>
+      <option value="wo_favor" ${m.resultType==='wo_favor'?'selected':''}>WO a mi favor</option>
+      <option value="wo_contra" ${m.resultType==='wo_contra'?'selected':''}>WO en mi contra</option>
+    </select>
+
+    <div id="sets-wrap" style="${m.resultType!=='normal'?'display:none':''}">
+      <div id="sets-rows">${renderSetsRows(m.sets && m.sets.length ? m.sets : [["",""],["",""]])}</div>
+      <button type="button" class="btn ghost small" onclick="addSetRow()" style="width:100%;">+ Añadir set</button>
+    </div>
+
+    <label>Notas del partido</label>
+    <textarea id="m-notes" rows="2" placeholder="Ej: Juego disputado, buen saque del rival...">${escapeHtml(m.notes||'')}</textarea>
+
+    <div class="form-actions">
+      <button class="btn primary" onclick="saveResultado(${n})">Guardar resultado</button>
+      <button class="btn ghost" onclick="closeModal()">Cancelar</button>
+    </div>
+  `;
+
+  document.getElementById('m-type').onchange = function(){
+    document.getElementById('sets-wrap').style.display = this.value==='normal' ? '' : 'none';
+  };
+
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function saveResultado(n){
+  const m = getMatch(n);
+  m.resultType = document.getElementById('m-type').value;
+  if(m.resultType==='normal'){
+    m.sets = collectSetsFromDOM();
+  }
+  m.notes = document.getElementById('m-notes').value.trim();
+  const w = calcWinner(m);
+  m.winner = w;
+  m.played = (m.resultType!=='normal') || (w!=="");
+
+  save();
+  closeModal();
+  refreshAll();
+}
+
+function closeModal(){
+  stopClasAutoRefresh();
+  document.getElementById('modal-bg').classList.remove('open');
+}
+
+function renderSetsRows(sets){
+  return sets.map((s,i)=>`
+    <div class="set-row">
+      <div class="lab"><span>Set ${i+1} (yo — rival)</span>${sets.length>1?`<button type="button" class="set-remove" onclick="removeSetRow(${i})">✕ quitar</button>`:''}</div>
+      <div class="inputs2col">
+        <input type="number" inputmode="numeric" class="set-a" placeholder="Yo" value="${s[0]}">
+        <input type="number" inputmode="numeric" class="set-b" placeholder="Rival" value="${s[1]}">
+      </div>
+    </div>`).join('');
+}
+
+function collectSetsFromDOM(){
+  return Array.from(document.querySelectorAll('#sets-rows .set-row')).map(row=>[
+    row.querySelector('.set-a').value,
+    row.querySelector('.set-b').value
+  ]);
+}
+
+function addSetRow(){
+  const sets = collectSetsFromDOM();
+  sets.push(["",""]);
+  document.getElementById('sets-rows').innerHTML = renderSetsRows(sets);
+}
+
+function removeSetRow(i){
+  const sets = collectSetsFromDOM();
+  sets.splice(i,1);
+  document.getElementById('sets-rows').innerHTML = renderSetsRows(sets);
+}
+
+function sendWA(n, target){
+  const m = getMatch(n);
+  const text = matchMessage(m);
+  const phone = target==='opp' ? PLAYERS[m.opp].phone : ORG.phone;
+  window.open(waLink(phone, text), '_blank');
+}
+
+function sendMail(n){
+  const m = getMatch(n);
+  const text = matchMessage(m);
+  const to = PLAYERS[m.opp].email, cc = ORG.email, subject = "Resultado 2 Grupo B";
+  if(isIOS() || isAndroid()){
+    window.location.href = mailLink(to, cc, subject, text);
+  }else{
+    window.open(gmailWebLink(to, cc, subject, text), '_blank');
+  }
+}
+
+function copyMatch(n, btn){ copyText(matchMessage(getMatch(n)), btn); }
+
+/* ---------- INVITAR ---------- */
+function renderInvitar(){
+  const sel = document.getElementById('inv-opp');
+  if(!sel.dataset.filled){
+    sel.innerHTML = FIXTURE.map(f=>`<option value="${escapeHtml(f.opp)}">J${f.n} · ${escapeHtml(f.opp)}${rankOf(f.opp)?' (nº'+rankOf(f.opp)+')':''}</option>`).join('');
+    sel.dataset.filled = "1";
+  }
+  const chipsWrap = document.getElementById('inv-time-chips');
+  if(chipsWrap && !chipsWrap.dataset.filled){
+    chipsWrap.innerHTML = timeChipsHTML('inv-time');
+    chipsWrap.dataset.filled = "1";
+  }
+  document.getElementById('inv-campo').innerHTML = courtsOptionsHTML(store.cache.campo || "");
+  document.getElementById('inv-campo-custom-wrap').style.display = 'none';
+  document.getElementById('inv-msgbox').innerHTML = "";
+  document.getElementById('inv-send').innerHTML = "";
+}
+
+function generarInvitacion(){
+  const opp = document.getElementById('inv-opp').value;
+  const date = document.getElementById('inv-date').value;
+  const time = document.getElementById('inv-time').value;
+  const campoSel = document.getElementById('inv-campo');
+  let campo = campoSel.value;
+  if(campo === '__custom__'){
+    const typed = document.getElementById('inv-campo-newname');
+    campo = typed ? typed.value.trim() : '';
+  }
+  if(campo) { store.cache.campo = campo; save(); }
+  const f = FIXTURE.find(x=>x.opp===opp);
+  const text = "Hola "+opp+"! Soy Marcello Gambardella, tu rival de la jornada "+f.n+" del 37º Beniopen (Segunda B). Te propongo jugar el "+fmtDate(date)+(time?" a las "+time+"h":"")+(campo?" en "+campo:"")+". ¿Te viene bien? ¡Un saludo!";
+  document.getElementById('inv-msgbox').innerHTML = `<div class="msgbox">${escapeHtml(text)}</div>`;
+  const p = PLAYERS[opp];
+  document.getElementById('inv-send').innerHTML = `<a class="btn wa" href="${waLink(p.phone, text)}" target="_blank" rel="noopener" style="width:100%;">📱 Enviar por WhatsApp</a>`;
+}
+
+/* ---------- Sincronización con el servidor (Apps Script) ---------- */
+function salvaDatiCloud(){
+  if(!isGasEnv()) return;
+  hasPendingLocalWrite = true;
+  if(isSaving) return;
+  isSaving = true;
+  const payload = JSON.stringify(store);
+  hasPendingLocalWrite = false;
+  showSyncIndicator('Guardando…');
+  google.script.run
+    .withSuccessHandler(function(){
+      isSaving = false;
+      if(hasPendingLocalWrite){ hasPendingLocalWrite = false; salvaDatiCloud(); }
+    })
+    .withFailureHandler(function(err){
+      isSaving = false;
+      console.error('Error al guardar en la nube:', err);
+      showSyncIndicator('⚠️ No se pudo guardar');
+    })
+    .salvaDatiNelFoglio(payload);
+}
+
+function caricaDatiCloud(){
+  if(!isGasEnv()) return;
+  if(isSyncing || isSaving) return;
+  isSyncing = true;
+  google.script.run
+    .withSuccessHandler(function(data){
+      isSyncing = false;
+      if(data && data.beniopen_data){
+        try{
+          const remoteStore = normalizeStore(JSON.parse(data.beniopen_data));
+          if(JSON.stringify(remoteStore) !== JSON.stringify(store)){
+            store = remoteStore;
+            try{ localStorage.setItem('beniopen_data', JSON.stringify(store)); }catch(e){}
+          }
+        }catch(e){
+          console.error('Datos remotos invalidos:', e);
+        }
+      }
+    })
+    .withFailureHandler(function(err){
+      isSyncing = false;
+    })
+    .leggiDatiCloud();
+}
+
+/* ---------- PWA: service worker ---------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker
+      .register('<?= swUrl ?>')
+      .then(function(registration) {
+        console.log('Service Worker registrato:', registration.scope);
+      })
+      .catch(function(error) {
+        console.warn('Service Worker non registrato:', error);
+      });
+  });
+}
+
+/* ---------- Init ---------- */
+try { renderInicio(); } catch(e) { console.error('[Beniopen] renderInicio error:', e); }
+
+if(isGasEnv()){
+  caricaDatiCloud();
+  let syncTimer = setInterval(caricaDatiCloud, 8000);
+
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden){
+      clearInterval(syncTimer);
+    } else {
+      caricaDatiCloud();
+      syncTimer = setInterval(caricaDatiCloud, 8000);
+    }
+  });
+}
+</script>
+</body>
+</html>
