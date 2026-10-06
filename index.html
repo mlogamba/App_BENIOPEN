@@ -826,10 +826,9 @@ function getClasificacionHtml(slug){
 
   const attempts = [
     viaGas,
-    viaProxy(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)),
-    viaProxy(u => 'https://corsproxy.io/?url=' + encodeURIComponent(u))
-  ];
-
+    viaProxy(u => 'https://corsproxy.org/?' + encodeURIComponent(u)),
+    viaProxy(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u))
+];
   let lastErr = null;
   return attempts.reduce((chain, attempt)=>
     chain.catch(err=>{
@@ -1080,7 +1079,8 @@ function fetchLiveResults(forceRefresh){
   if(container) container.innerHTML = '<div class="empty">⏳ Conectando con beniopen.es...</div>';
   
   const targetUrl = 'https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/';
-  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl);
+  const targetUrl = 'https://www.beniopen.es/ultimos-resultados/ultimos-resultados-segunda/';
+  const proxyUrl = 'https://corsproxy.org/?' + encodeURIComponent(targetUrl);
 
   fetch(proxyUrl)
     .then(res => {
@@ -1123,7 +1123,6 @@ function fetchLiveResults(forceRefresh){
       }
     });
 }
-
 function showLiveError(errMsg){
   const container = document.getElementById('live-results-container');
   if(!container) return;
